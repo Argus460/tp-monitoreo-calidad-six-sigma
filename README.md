@@ -1,50 +1,145 @@
-# Trabajo Práctico: Sistema de Monitoreo de Calidad Industrial (Six Sigma)
+# Trabajo Práctico: Sistema de Monitoreo de Calidad Industrial
 
 ## Situación Hipotética
 
-Imaginemos una empresa de alta tecnología, "QuantumTech Precision", líder en la fabricación de componentes críticos para diversas industrias, incluyendo la automotriz, aeroespacial y médica. La reputación de QuantumTech se basa en la fiabilidad y la calidad intransigente de sus productos. En un entorno donde la más mínima desviación de las especificaciones puede tener consecuencias catastróficas, la empresa ha adoptado un enfoque de control de calidad basado en los principios de Six Sigma, buscando una variabilidad casi nula y una detección proactiva de cualquier anomalía.
+**QuantumTech Precision** fabrica componentes en lotes y evalúa muestras mediante procedimientos de inspección. En la actualidad registra mediciones, calibraciones y defectos en documentos separados: puede utilizar equipos con calibración vencida, cerrar lotes incompletos y producir reportes que no explican qué defectos causaron el rechazo.
 
-El proceso de producción en QuantumTech genera **lotes de componentes**. Cada lote posee un identificador único y una cantidad específica de unidades fabricadas bajo las mismas condiciones. Una vez que un lote está completo, pasa a la fase de inspección.
+La empresa solicita un prototipo que coordine inspecciones reproducibles y determine la conformidad de muestras y lotes. El sistema aplica umbrales definidos; no realiza inferencia estadística Six Sigma, muestreo automático ni análisis de causa raíz.
 
-De cada **lote de componentes**, se extrae un número estadísticamente significativo de **muestras**. Cada muestra representa un subconjunto de componentes individuales del lote y es el objeto de estudio principal para la evaluación de calidad. Estas muestras son asignadas a profesionales de calidad para su evaluación.
+### Objetivo del sistema
 
-La inspección se rige por estrictos **procedimientos de verificación**. Estos procedimientos no son genéricos; están diseñados específicamente para cada tipo de componente o fase de producción. Un procedimiento de verificación detalla qué parámetros deben medirse (ej. dimensiones críticas, peso, resistencia a la tracción, conductividad eléctrica, pureza de materiales, acabado superficial), qué rangos de tolerancia son aceptables y qué **equipos de precisión** deben ser utilizados.
+El prototipo deberá permitir:
 
-Un **profesional de calidad**, un experto altamente calificado y certificado por la empresa, es el encargado de llevar a cabo las mediciones y verificaciones sobre cada muestra utilizando los equipos apropiados. Durante este proceso, el profesional de calidad registra cualquier desviación de las especificaciones como una **imperfección**. Las imperfecciones tienen diferentes tipos (dimensional, superficial, funcional, etc.) y una **gravedad** asociada que indica su impacto potencial. Una imperfección dimensional, por ejemplo, podría ser un componente con un diámetro fuera de la tolerancia de 0.05 mm, mientras que una imperfección superficial podría ser una micro-fisura.
+- registrar lotes, muestras, profesionales, equipos y procedimientos;
+- verificar certificaciones y vigencia de calibración antes de inspeccionar;
+- ejecutar procedimientos con comportamientos de evaluación diferentes;
+- registrar defectos y cerrar muestras mediante transiciones controladas;
+- emitir reportes de desviación trazables;
+- decidir un lote solo cuando todas sus muestras estén inspeccionadas.
 
-Si, tras la inspección, una muestra acumula imperfecciones que superan ciertos umbrales de gravedad o si presenta una imperfección clasificada como "Crítica", se emite un **reporte de desviación**. Un reporte de desviación es un registro formal del problema, indicando la muestra afectada, el profesional de calidad que la detectó, las imperfecciones específicas encontradas y una evaluación preliminar del impacto potencial sobre el lote de componentes al que pertenece. Este sistema de reportes de desviación es vital para la trazabilidad, el análisis de causa raíz y la mejora continua, permitiendo a QuantumTech mantener sus estándares de calidad y minimizar el riesgo de productos defectuosos en el mercado.
+### Alcance y vocabulario del dominio
 
-El sistema que ustedes diseñarán permitirá modelar y gestionar este flujo de trabajo de control de calidad, desde la creación de lotes hasta la detección y registro de desviaciones, facilitando un monitoreo riguroso y una toma de decisiones informada. El objetivo es construir una base sólida que sea extensible, permitiendo incorporar nuevas funcionalidades en el futuro sin la necesidad de un rediseño radical.
+| Concepto | Representa | Es responsable de | No es responsable de |
+| --- | --- | --- | --- |
+| Lote | Una partida homogénea de componentes | Identidad, cantidad, muestras y estado | Ejecutar mediciones |
+| Muestra | Un subconjunto identificado del lote | Defectos, estado y resultado de conformidad | Calibrar equipos |
+| Procedimiento | Una forma definida de inspección | Requisitos y criterio para convertir observaciones en defectos | Aprobar por sí solo el lote |
+| Profesional | Quien ejecuta una inspección | Identidad y certificaciones vigentes | Cambiar tolerancias durante una ejecución |
+| Equipo | Un instrumento de medición | Identidad, categoría y última calibración | Decidir la conformidad de una muestra |
+| Defecto | Una desviación observada | Tipo, descripción y gravedad | Modificar una muestra cerrada |
+| Inspección | La ejecución de un procedimiento | Muestra, profesional, equipo, fecha y resultado | Reutilizarse para otra muestra |
+| Reporte | El respaldo de una muestra no conforme | Causas, responsable y fecha | Agregar defectos nuevos |
+
+```mermaid
+flowchart LR
+    L[Lote] -->|contiene| M[Muestras]
+    I[Inspección] -->|evalúa| M
+    P[Procedimiento] -->|guía| I
+    Q[Profesional] -->|ejecuta| I
+    E[Equipo] -->|se utiliza en| I
+    I -->|registra| D[Defectos]
+    M -->|si no es conforme origina| R[Reporte]
+    M -->|contribuye a decidir| L
+```
+
+El mapa describe información del negocio y no obliga a implementar una clase por concepto.
+
+### Flujo de inspección
+
+```mermaid
+flowchart TD
+    A[Seleccionar muestra y procedimiento] --> B{Profesional certificado?}
+    B -->|No| X[Rechazar sin cambios]
+    B -->|Sí| C{Equipo compatible y calibrado?}
+    C -->|No| X
+    C -->|Sí| D[Iniciar inspección]
+    D --> E[Aplicar criterio del procedimiento]
+    E --> F[Registrar defectos]
+    F --> G[Cerrar muestra]
+    G --> H{Es no conforme?}
+    H -->|Sí| I[Emitir reporte]
+    H -->|No| J[Conservar resultado conforme]
+    I --> K{Todas las muestras cerradas?}
+    J --> K
+    K -->|Sí| L[Decidir lote]
+```
+
+### Convenciones de cálculo
+
+La gravedad es un entero de `1` a `5`, donde `5` es crítica. Cada procedimiento define un límite positivo de gravedad acumulada. Una muestra es `NO_CONFORME` si contiene al menos un defecto crítico o si la suma de gravedades es estrictamente mayor que ese límite. Para decidir el lote se calcula `muestras_no_conformes / muestras_totales * 100`, sin redondear.
+
+### Ejemplo de aceptación
+
+Un lote de `1000` piezas contiene `50` muestras. Todas fueron inspeccionadas: `3` son no conformes y `47` conformes. El porcentaje es `3 / 50 * 100 = 6 %`; como supera el `5 %`, el lote queda `RECHAZADO`. Con `2` muestras no conformes el resultado sería `4 %` y quedaría `APROBADO`.
+
+Una de las tres muestras tiene defectos de gravedad `2` y `4`, y su procedimiento fija límite acumulado `5`: es no conforme porque `2 + 4 = 6 > 5`. Si la suma fuera exactamente `5`, sería conforme salvo que uno de los defectos tuviera gravedad crítica.
+
+### Fuera de alcance
+
+No se requiere interfaz gráfica, persistencia, adquisición automática de mediciones, selección estadística de muestras, gráficos de control, índices sigma, causa raíz, retrabajo, costos ni integración con equipos físicos.
 
 ## Requerimientos Técnicos Obligatorios
 
-Su diseño y su posterior implementación deben construirse de manera estrictamente **Orientada a Objetos**. Esto implica concebir el sistema como una interacción de componentes que encapsulan tanto sus características como sus comportamientos. Deberán:
-
--   Modelar el dominio del problema mediante la identificación de los elementos clave y la representación de sus propiedades y acciones.
--   Demostrar la capacidad de estructurar el código de forma jerárquica, permitiendo que elementos especializados compartan funcionalidades generales.
--   Asegurar que diferentes tipos de elementos relacionados puedan ser tratados de manera uniforme, facilitando la flexibilidad y la extensión del sistema.
--   Manejar las situaciones anómalas o las violaciones a las reglas del negocio de una forma controlada y explícita, informando adecuadamente sobre lo ocurrido sin comprometer la estabilidad del sistema.
--   Asegurar la fiabilidad de las distintas partes del sistema, verificando su correcto funcionamiento de manera aislada para garantizar la solidez del conjunto.
+- Implementar la solución con Programación Orientada a Objetos y separar el punto de entrada de la lógica del dominio.
+- Identificar y justificar una jerarquía de herencia que represente una especialización real y una variación polimórfica entre procedimientos que evalúen observaciones de manera diferente.
+- Encapsular defectos, estados y decisiones; una muestra o lote no puede cerrarse modificando atributos directamente.
+- Definir excepciones propias para datos inválidos, equipo no apto, certificación faltante y transiciones ilegales.
+- Implementar manualmente los cálculos de gravedad, porcentajes y agregación de defectos con estructuras nativas.
+- Utilizar `date` o `datetime` para calibraciones, certificaciones e inspecciones.
+- Escribir pruebas unitarias con `pytest` para criterios, fechas límite, transiciones y consultas.
 
 ## Reglas de Negocio
 
-A continuación, se describen los procesos clave y las condiciones que su sistema debe reflejar y garantizar estrictamente.
+1. **Identidad y cantidades:** Los identificadores de lotes, muestras, profesionales, equipos, procedimientos e inspecciones son únicos dentro de su categoría y no vacíos. La cantidad fabricada y la cantidad de unidades representadas por cada muestra son enteras positivas.
+2. **Pertenencia de muestras:** Cada muestra pertenece a exactamente un lote y su identificador no se repite en él. La suma de unidades representadas por sus muestras no puede superar la cantidad fabricada; una muestra no puede moverse a otro lote.
+3. **Gravedad válida:** Todo defecto conserva tipo y descripción no vacíos y una gravedad entera entre `1` y `5`, ambos inclusive. Los datos específicos de cada tipo de defecto deben ser coherentes con el procedimiento que lo produjo.
+4. **Calibración inclusiva:** Un equipo es apto en una fecha si su categoría coincide con la requerida y su última calibración satisface `fecha_inspeccion - 6 meses <= fecha_calibracion <= fecha_inspeccion`. Para este TP, seis meses se calculan como `182 días`.
+5. **Certificación:** Un procedimiento puede exigir una certificación. Para ejecutarlo, el profesional debe poseerla y debe estar vigente de forma inclusiva en la fecha de inspección. Una inspección rechazada por este motivo no modifica la muestra.
+6. **Inicio de inspección:** Solo una muestra `PENDIENTE` puede pasar a `EN_INSPECCION`. Antes se validan profesional, equipo y procedimiento. Una muestra admite una única inspección aceptada y los requisitos no pueden cambiar durante esa ejecución.
+7. **Evaluación polimórfica:** Cada procedimiento transforma sus observaciones en cero o más defectos mediante su propio criterio. Todos se ejecutan mediante la misma operación observable y no pueden registrar defectos ajenos a la inspección en curso.
+8. **Conformidad de la muestra:** Al cerrar, la muestra queda `NO_CONFORME` si tiene un defecto de gravedad `5` o si la suma de gravedades es estrictamente mayor que el límite del procedimiento; en caso contrario queda `CONFORME`. Ambos estados son finales.
+9. **Inmutabilidad al cerrar:** Luego del cierre no se pueden agregar, quitar ni reemplazar defectos ni repetir la inspección. Un intento inválido conserva intactos el resultado y los defectos existentes.
+10. **Reporte de desviación:** Cerrar una muestra no conforme genera exactamente un reporte con muestra, lote, profesional, fecha y copia inmutable de todos los defectos que determinaron el resultado. Una muestra conforme no genera reporte.
+11. **Decisión del lote:** Un lote solo puede decidirse cuando tiene al menos una muestra y todas están cerradas. Queda `RECHAZADO` si el porcentaje no conforme es estrictamente mayor que `5 %`; con exactamente `5 %` queda `APROBADO`. La decisión es final.
+12. **Consultas del lote:** El sistema puede obtener cantidad total de defectos críticos y conteos por tipo considerando únicamente muestras cerradas. Estas consultas y el cálculo preliminar del porcentaje no cambian muestras, reportes ni estado del lote.
 
-1.  Cada partida de producción de componentes debe tener un identificador único y una cantidad definida de piezas. La cantidad de componentes no puede ser un número cero o negativo; el sistema debe señalar esta inconsistencia de forma explícita si se intenta registrar tal cantidad.
-2.  Una muestra se clasifica como 'No Conforme' si se detecta en ella al menos una imperfección de 'gravedad' crítica (la máxima) o si la suma total de las gravedades de todas sus imperfecciones excede un cierto límite establecido.
-3.  El sistema debe diferenciar entre distintos tipos de imperfecciones, como las que afectan las dimensiones de una pieza y aquellas relacionadas con su superficie. Las imperfecciones dimensionales, por ejemplo, deben poder registrar el valor real medido y el valor que se esperaba, además de una descripción y su nivel de gravedad.
-4.  Un equipo de precisión sólo es apto para una inspección si su última calibración fue realizada dentro de los últimos seis meses. Si un profesional de calidad intenta utilizar un equipo cuya calibración ha caducado, el sistema debe impedir la acción y notificar claramente la razón.
-5.  Los diversos procedimientos de verificación, como los dimensionales o visuales, deben guiar la evaluación de una muestra por parte de un profesional de calidad y con un equipo específico. Aunque la forma de verificar varía, el sistema debe permitir iniciar la inspección de una muestra de manera uniforme, y cada procedimiento deberá aplicar su lógica particular para identificar y registrar imperfecciones en la muestra.
-6.  La gravedad de una imperfección debe estar siempre entre un nivel 'Menor' (1) y 'Crítico' (5). Cualquier intento de registrar una gravedad fuera de este rango válido debe ser rechazado por el sistema, indicando la incorrección.
-7.  El estado final de una partida de componentes ('Aprobado' o 'Rechazado') sólo puede definirse una vez que todas las muestras de esa partida han sido completamente inspeccionadas. Si más del 5% de las muestras inspeccionadas resultan 'No Conformes', la partida completa debe ser marcada como 'Rechazada'; en caso contrario, se considera 'Aprobada'.
-8.  Cuando se genera un reporte de desviación para una muestra, este registro debe vincularse claramente con la muestra afectada, con el profesional de calidad que identificó el problema y con el listado detallado de las imperfecciones específicas que lo ocasionaron.
-9.  Para garantizar la precisión en la evaluación de las partidas, se debe verificar mediante una prueba que, en una partida de 50 muestras, si 3 de ellas son clasificadas como 'No Conformes' (según la condición establecida), el estado final de dicha partida sea 'Rechazado'.
-10. Existen diferentes categorías de profesionales de calidad, algunos de ellos con certificaciones especiales para realizar tareas específicas. Ciertos procedimientos de verificación de alta especialización solo pueden ser llevados a cabo por un profesional con la certificación adecuada. Si un profesional sin la certificación requerida intenta ejecutar uno de estos procedimientos, el sistema debe impedírselo y emitir una alerta clara.
-11. Una vez que el análisis de una muestra ha concluido y esta ha sido marcada como 'No Conforme', no se pueden añadir nuevas imperfecciones a su registro. Cualquier intento de modificarla en ese estado debe ser rechazado por el sistema.
-12. El sistema debe poder calcular y mostrar el número total de imperfecciones de gravedad 'Crítica' (la máxima) que se han detectado en todas las muestras ya inspeccionadas de una determinada partida de componentes.
+### Pruebas mínimas esperadas
+
+- identificadores duplicados, cantidades inválidas y muestras que exceden el lote;
+- gravedades `1`, `5` y valores fuera del rango;
+- calibración exactamente a `182` días y un día vencida;
+- certificación ausente, vencida y vigente en sus límites;
+- equipo de categoría incompatible;
+- suma justo en el límite y por encima, con y sin defecto crítico;
+- intento de modificar o reinspeccionar una muestra cerrada;
+- contenido y unicidad del reporte;
+- lote incompleto, exactamente en `5 %` y por encima;
+- conteo de críticos sin efectos secundarios.
+
+### Decisiones de diseño que deberán resolver
+
+- ¿Cómo reciben observaciones distintas los procedimientos sin exponer la representación interna de la muestra?
+- ¿Quién valida en conjunto certificación, equipo y estado antes de iniciar?
+- ¿Cómo se conserva el contexto de una inspección sin permitir que cambien sus requisitos?
+- ¿La conformidad se almacena o se deriva de los defectos? ¿Qué evita contradicciones?
+- ¿Cómo se crea una copia estable de las causas de un reporte?
+- ¿Dónde se ubica la decisión del lote para no acoplarla a un tipo particular de procedimiento?
+
+No existe una arquitectura única. Se evaluarán invariantes, responsabilidades, extensibilidad y evidencia automatizada.
+
+### Evolución durante el semestre
+
+1. **Registro de calidad:** lotes, muestras, defectos, gravedades y validaciones básicas.
+2. **Inspecciones:** profesionales, certificaciones, equipos, calibración y estados de muestra.
+3. **Resultados trazables:** conformidad, reportes, cierre y decisión de lotes.
+4. **Variación de comportamiento:** al menos dos procedimientos intercambiables, por ejemplo dimensional y visual, con observaciones y criterios propios.
+5. **Cambio controlado:** la cátedra seleccionará una extensión —por ejemplo reinspección autorizada, muestreo por severidad o calibraciones por horas de uso— para evaluar la adaptabilidad.
+
+Cada incremento deberá conservar pruebas previas y actualizar brevemente el diagrama y las decisiones afectadas.
 
 ## Notas
-- Se prohíbe el uso de la librería pandas; el objetivo es evaluar el manejo de estructuras nativas (listas, diccionarios) y la lógica de algoritmos manuales.
-- Es requisito obligatorio presentar un diagrama de flujo previo a la codificación para organizar la arquitectura lógica y prevenir fallos de diseño.
-- Cada implementación debe estar debidamente sustentada; el alumno debe ser capaz de explicar y justificar técnicamente las decisiones tomadas en el código.
-- Se recomienda el uso de la librería estándar de Python (como datetime o math) para optimizar tareas específicas y evitar la redacción innecesaria de funciones ya existentes.
+
+- Se prohíbe `pandas` y las librerías estadísticas que resuelvan los cálculos evaluados; deberán usar estructuras nativas.
+- Antes de codificar, presenten un diagrama de responsabilidades y relaciones; el mapa incluido no prescribe clases.
+- Cada implementación deberá estar sustentada y las reglas críticas demostradas mediante pruebas automatizadas.
+- Se permite la biblioteca estándar de Python, especialmente `datetime`, sin conexión a dispositivos externos.
