@@ -242,9 +242,12 @@ class Profesional:
     """Quien ejecuta una inspección. Responsable de su identidad y de sus
     certificaciones vigentes. No cambia tolerancias durante una ejecución."""
 
-    def __init__(self, id: str, nombre: str):
+    contador = 0
+    
+    def __init__(self, nombre: str):
         # TODO: validar id y nombre no vacíos -> DatosInvalidos
-        self._id = id
+        self._id = 'Prof' + str(Profesional.contador)
+        Profesional.contador += 1
         self._nombre = nombre
         self._certificaciones: dict[str, Certificacion] = {}
 
@@ -275,10 +278,12 @@ class Profesional:
 class Equipo:
 
     DIAS_VIGENCIA_CALIBRACION = 182  # los "seis meses" del enunciado
+    contador = 0
 
-    def __init__(self, id: str, categoria: str, fecha_calibracion: date):
+    def __init__(self, categoria: str, fecha_calibracion: date):
         # TODO: validar id y categoria no vacíos -> DatosInvalidos
-        self._id = id
+        self._id = 'Equip' + str(Equipo.contador)
+        Equipo.contador += 1
         self._categoria = categoria
         self._fecha_calibracion = fecha_calibracion
 
@@ -322,11 +327,13 @@ class Equipo:
 class Procedimiento(ABC):
     """Define sus requisitos (equipo y certificación), su límite de gravedad
     acumulada, y su criterio para convertir observaciones en defectos."""
+    contador = 0
 
-    def __init__(self, id: str, limite_gravedad: int,
+    def __init__(self, limite_gravedad: int,
                  categoria_equipo: str, certificacion: str | None):
         # TODO: validar id y categoria_equipo no vacíos, limite_gravedad > 0
-        self._id = id
+        self._id ='Proced' + str(Procedimiento.contador)
+        Procedimiento.contador += 1
         self._limite_gravedad = limite_gravedad
         self._categoria_equipo = categoria_equipo
         self._certificacion = certificacion
@@ -433,9 +440,12 @@ class ProcedimientoVisual(Procedimiento):
 
 class Muestra:
 
-    def __init__(self, id: str, unidades: int):
+    contador = 0
+
+    def __init__(self, unidades: int):
         # TODO: validar id no vacío y unidades entero > 0 -> DatosInvalidos
-        self._id = id
+        self._id = 'Mue' + str(Muestra.contador)
+        Muestra.contador += 1
         self._unidades = unidades
         self._estado = EstadoMuestra.PENDIENTE
         self._defectos: tuple[Defecto, ...] = ()
@@ -536,10 +546,11 @@ class Muestra:
 class Lote:
 
     UMBRAL_RECHAZO_PORCENTUAL = 5.0
-
-    def __init__(self, id: str, cantidad_fabricada: int):
+    contador = 0
+    def __init__(self, cantidad_fabricada: int):
         # TODO: validar id no vacío y cantidad_fabricada entero > 0
-        self._id = id
+        self._id = 'Lot' + str(Lote.contador)
+        Lote.contador += 1
         self._cantidad_fabricada = cantidad_fabricada
         self._muestras: dict[str, Muestra] = {}
         self._estado = EstadoLote.ABIERTO
@@ -636,12 +647,13 @@ class Lote:
 
 
 class Reporte:
-
-    def __init__(self, id: str, muestra: Muestra, lote: Lote,
+    contador = 0
+    def __init__(self, muestra: Muestra, lote: Lote,
                  profesional: Profesional, fecha: date,
                  defectos: tuple[Defecto, ...]):
         # TODO: validar id no vacío -> DatosInvalidos
-        self._id = id
+        self._id = 'Rep' + str(Reporte.contador)
+        Reporte.contador += 1        
         self._muestra = muestra
         self._lote = lote
         self._profesional = profesional
@@ -695,10 +707,12 @@ class Inspeccion:
 
     PREFIJO_REPORTE = "REP-"
 
+    contador = 0
     def __init__(self, id: str, muestra: Muestra, profesional: Profesional,
                  equipo: Equipo, procedimiento: Procedimiento, fecha: date):
         # TODO: validar id no vacío -> DatosInvalidos
-        self._id = id
+        self._id = 'Insp' + str(Inspeccion.contador)
+        Inspeccion.contador += 1        
         self._muestra = muestra
         self._profesional = profesional
         self._equipo = equipo
