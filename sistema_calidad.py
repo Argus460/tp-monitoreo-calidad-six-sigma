@@ -14,16 +14,17 @@ la colección interna.
 
 Orden del archivo:
     1. Excepciones
-    2. Estados (enums)
-    3. Defecto y sus subclases
-    4. Certificacion y Profesional
-    5. Equipo
-    6. Procedimiento y sus subclases
-    7. Muestra
-    8. Lote
-    9. Reporte
-   10. Inspeccion
-   11. Registro
+    2. Validaciones
+    3. Estados (enums)
+    4. Defecto y sus subclases
+    5. Certificacion y Profesional
+    6. Equipo
+    7. Procedimiento y sus subclases
+    8. Muestra
+    9. Lote
+    10. Reporte
+   11. Inspeccion
+   12. Registro
 """
 
 from __future__ import annotations
