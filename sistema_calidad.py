@@ -356,7 +356,8 @@ class Procedimiento(ABC):
         Validar.entero_positivo(limite_gravedad, "limite_gravedad")
         Validar.texto_no_vacio(categoria_equipo, "categoria_equipo")
         if certificacion is not None:
-            Validar.texto_no_vacio(certificacion, "certificacion")        self._id ='Proced' + str(Procedimiento.contador)
+            Validar.texto_no_vacio(certificacion, "certificacion")        
+            self._id ='Proced' + str(Procedimiento.contador)
         self._id = 'Proced' + str(Procedimiento.contador)
         Procedimiento.contador += 1
         self._limite_gravedad = limite_gravedad
