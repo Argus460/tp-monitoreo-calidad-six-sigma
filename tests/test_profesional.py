@@ -18,6 +18,15 @@ def test_nombre_invalido():
     with pytest.raises(DatosInvalidos):
         Profesional('')
 
+def test_nombre_solo_espacios():
+    with pytest.raises(DatosInvalidos):
+        Profesional('   ')
+
+def test_nombre_no_texto():
+    with pytest.raises(DatosInvalidos):
+        Profesional(123)
+
+
 '''
 Falta  
     def agregar_certificacion(self, cert):
