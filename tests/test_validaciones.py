@@ -47,4 +47,4 @@ def test_es_entero():
     resultado_3 = Validar._es_entero('hola')
     assert resultado_3 == False
     resultado_4 = Validar._es_entero(4)
-    assert resultado_3 == True
+    assert resultado_4 == True
