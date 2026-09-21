@@ -6,13 +6,13 @@ def test_creacion_defecto():
         'tipo',
         'descripcion de defecto',
         3,
-        {'datos', 'defecto grave!'}
+        {'datos'}
     )
 
     assert defect.tipo == 'tipo'
     assert defect.descripcion == 'descripcion de defecto'
     assert defect.gravedad == 3
-    assert defect.datos_observacion == {'datos', 'defecto grave!'}
+    assert defect.datos_observacion == {'datos'}
 
 '''
 Falta validar los metodos que todavia no estan hechos
