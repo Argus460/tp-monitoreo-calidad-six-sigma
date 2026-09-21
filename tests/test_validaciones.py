@@ -1,5 +1,5 @@
 import pytest
-from sistema_calidad import Validar
+from sistema_calidad import Validar, DatosInvalidos
 
 @pytest.fixture(autouse=True)
 def reset_Validar_estado():
@@ -11,6 +11,6 @@ def reset_Validar_estado():
 
 def test_texto_no_vacio():
     with pytest.raises(DatosInvalidos):
-        Validar.texto_no_vacio("")
+        Validar.texto_no_vacio("", 'nombre')
 
 
