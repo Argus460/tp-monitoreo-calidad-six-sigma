@@ -3,16 +3,18 @@ from sistema_calidad import Defecto
 
 def test_creacion_defecto():
     defect = Defecto(
-        'tipo',
+        "tipo",
         'descripcion de defecto',
         3,
-        {'datos'}
+        temperatura=4,
+        abolladuras = 12
     )
 
-    assert defect.tipo == 'tipo'
-    assert defect.descripcion == 'descripcion de defecto'
-    assert defect.gravedad == 3
-    assert defect.datos_observacion == {'datos'}
+    assert defect._tipo == 'tipo'
+    assert defect._descripcion == 'descripcion de defecto'
+    assert defect._gravedad == 3
+    assert defect._datos_observacion == {'temperatura': 4,
+            'abolladuras': 12}
 
 '''
 Falta validar los metodos que todavia no estan hechos
