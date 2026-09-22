@@ -354,6 +354,7 @@ class Equipo:
 # Un procedimiento NO aprueba el lote por sí solo.
 
 
+
 class Procedimiento(ABC):
     """Define sus requisitos (equipo y certificación), su límite de gravedad
     acumulada, y su criterio para convertir observaciones en defectos."""
@@ -389,20 +390,25 @@ class Procedimiento(ABC):
 
     def campos_observacion(self) -> tuple[str]:
         """Los campos propios de sus defectos."""
+        return self.CAMPOS_OBSERVACION
         pass
 
-    def limite_gravedad(self) -> int:
-        pass
+    def get_limite_gravedad(self) -> int:
+        return self._limite_gravedad
+        
 
-    def categoria_equipo(self) -> str:
-        pass
+    def get_categoria_equipo(self) -> str:
+        return self._categoria_equipo   
+    
+    def get_certificacion_requerida(self) -> str | None:
+        if self._certificacion is None:
+            return None
+        else: 
+            return self._certificacion
 
-    def certificacion_requerida(self) -> str | None:
-        """None si el procedimiento no exige certificación."""
-        pass
-
-    def id(self) -> str:
-        pass
+    def get_id(self) -> str:
+        return self._id
+    
 
 
 class ProcedimientoDimensional(Procedimiento):
@@ -421,36 +427,43 @@ class ProcedimientoDimensional(Procedimiento):
         super().__init__(limite_gravedad, categoria_equipo, certificacion)
         self._nominal_mm = nominal_mm
         self._tolerancia_mm = tolerancia_mm
+    def evaluar(self, mediciones: list[float]) -> list[dict]: 
+        try:
+            if not isinstance(mediciones, (list)):
+                raise DatosInvalidos(
+                    f"'mediciones' debe ser una lista de números "
+                    f"(recibido: {mediciones!r}).")
+            for m in mediciones:
+                if not isinstance(m, (int, float)) or isinstance(m, bool):
+                    raise DatosInvalidos(
+                        f"Cada medición debe ser un número (recibido: {m!r}).")
+            hallazgos = []
+            for m in mediciones: 
+                desvio = round(abs(m - self._nominal_mm), 6)
+                tolerancia = round(self._tolerancia_mm, 6)
+                if desvio > tolerancia: 
+                    gravedad = max(1, min(5, math.ceil(round(desvio / tolerancia, 6))))
+                    hallazgo = {
+                        "tipo": self.TIPO_DEFECTO,
+                        "descripcion": f"Medición {m} fuera de tolerancia",
+                        "gravedad": gravedad,
+                        "valor_medido_mm": m,
+                        "nominal_mm": self._nominal_mm,
+                        "tolerancia_mm": self._tolerancia_mm
+                    }
+                    hallazgos.append(hallazgo)
+            return hallazgos
+        except Exception as e:
+            raise DatosInvalidos(
+                f"Error al evaluar mediciones: {e}") from e
+            
+                
 
-    def evaluar(self, mediciones: list[float]) -> list[dict]:
-        """Por cada medición con desviacion = |medicion - nominal| mayor
-        que la tolerancia, genera un hallazgo con los campos
-        valor_medido_mm, nominal_mm y tolerancia_mm. Las que caen dentro
-        de tolerancia no generan nada.
+    def get_nominal_mm(self) -> float:
+        return self._nominal_mm
 
-        Gravedad: max(1, min(5, ceil(desviacion / tolerancia))).
-        Cuántas veces se pasó de la tolerancia, redondeado hacia arriba con
-        math.ceil, con techo en 5 y piso en 1. Por esta vía el valor cae
-        entre 2 y 5 (una medición dentro de tolerancia no genera hallazgo);
-        el piso es una segunda línea de defensa del rango 1..5.
-
-        FLOTANTES (problema aparte de ceil): |10.3 - 10.0| da
-        0.3000000000000007, y dividido 0.1 da 3.000000000000007, que con
-        ceil es 4 y no 3. Por eso la desviación y el cociente se redondean
-        a 6 decimales con round() antes de comparar y de aplicar ceil.
-
-        'mediciones' que no sea lista, o alguna medición que no sea número
-        -> DatosInvalidos (no TypeError: quien llama espera errores del
-        dominio)."""
-        # FALTA FUNCIÓN -> DatosInvalidos si mediciones no es lista o
-        #                  alguna medición no es número
-        pass
-
-    def nominal_mm(self) -> float:
-        pass
-
-    def tolerancia_mm(self) -> float:
-        pass
+    def get_tolerancia_mm(self) -> float:
+        return self._tolerancia_mm
 
 
 class ProcedimientoVisual(Procedimiento):
@@ -479,22 +492,35 @@ class ProcedimientoVisual(Procedimiento):
         self._gravedad_base = gravedad_base
 
     def evaluar(self, hallazgos: list[dict]) -> list[dict]:
-        """Recibe diccionarios con 'zona_afectada' y 'patron'. Por cada uno
-        genera un hallazgo con esos dos campos y gravedad 5 si la zona
-        figura en _zonas_criticas, o gravedad_base en cualquier otro caso.
-        
-        'hallazgos' que no sea lista, o un hallazgo que no sea dict, sin
-        esas claves o con textos vacíos -> DatosInvalidos."""
-        # FALTA FUNCIÓN -> DatosInvalidos si hallazgos o un hallazgo están
-        # mal formados
-        pass
-
-    def zonas_criticas(self) -> tuple[str]:
-        """Copia del conjunto de zonas críticas."""
-        pass
-
-    def gravedad_base(self) -> int:
-        pass
+        if not isinstance(hallazgos,list): 
+            raise DatosInvalidos(
+                f"'hallazgos' debe ser una lista de diccionarios "
+                f"(recibido: {hallazgos!r}).")
+        resultado=[]
+        for hallazgo in hallazgos:
+            if not isinstance(hallazgo, dict):
+                raise DatosInvalidos(
+                    f"Cada hallazgo debe ser un diccionario "
+                    f"(recibido: {hallazgo!r}).")
+            if "zona_afectada" not in hallazgo or "patron" not in hallazgo:
+                raise DatosInvalidos(
+                    f"Cada hallazgo debe contener las claves 'zona_afectada' y 'patron' "
+                    f"(recibido: {hallazgo!r}).")#Revisa que CONTENGA las CLAVES
+            Validar.texto_no_vacio(hallazgo["zona_afectada"], "zona_afectada")
+            Validar.texto_no_vacio(hallazgo["patron"], "patron")
+            if hallazgo["zona_afectada"] in self._zonas_criticas:
+                gravedad = Defecto.GRAVEDAD_CRITICA   
+            else:
+                gravedad = self._gravedad_base
+            resultado.append(
+                {
+                "tipo": self.TIPO_DEFECTO,
+                "descripcion": f"Hallazgo visual en zona {hallazgo['zona_afectada']}",
+                "gravedad": gravedad,
+                "zona_afectada": hallazgo["zona_afectada"],
+                "patron": hallazgo["patron"]
+                    })
+        return resultado
 
 
 # =====================================================================
