@@ -941,6 +941,31 @@ class Inspeccion:
         pass
 
     def ejecutar(self, observaciones) -> Reporte | None:
+        
+        if self._ejecutada == True:
+            raise TransicionIlegal('La inspeccion ya fue ejecutada')
+        else:
+            self.validar_requisitos()
+
+        self._muestra.marcar_en_inspeccion(self._procedimiento.campos_observacion())
+
+        try:
+            hallazgos = self._procedimiento.evaluar(observaciones)
+            for hallazgo in hallazgos:
+                self._muestra.registrar_defecto(**hallazgo)
+            self._muestra.cerrar(self._procedimiento.limite_gravedad())
+        except Exception:
+            self._muestra.revertir_a_pendiente()
+            raise
+
+        self._ejecutada = True
+        
+        if self._muestra.estado == 'NO_CONFORME':
+            self._reporte = Reporte(self._muestra, self._muestra._lote, self._profesional, self._fecha, hallazgos)
+            return self._reporte
+        else:
+            return None
+
         """Secuencia completa:
 
         1. Si esta inspección ya se ejecutó -> TransicionIlegal
