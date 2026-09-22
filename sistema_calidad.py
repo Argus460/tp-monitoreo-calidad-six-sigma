@@ -403,13 +403,13 @@ class ProcedimientoDimensional(Procedimiento):
     TIPO_DEFECTO = "dimensional"
     CAMPOS_OBSERVACION = ("valor_medido_mm", "nominal_mm", "tolerancia_mm")
 
-    def __init__(self, id: str, limite_gravedad: int, categoria_equipo: str,
+    def __init__(self, limite_gravedad: int, categoria_equipo: str,
                  certificacion: str | None,
                  nominal_mm: float, tolerancia_mm: float):
-        super().__init__(id, limite_gravedad, categoria_equipo, certificacion)
+        
         Validar.numero_positivo(nominal_mm, "nominal_mm")
         Validar.numero_positivo(tolerancia_mm, "tolerancia_mm")        
-        self._nominal_mm = nominal_mm
+
         super().__init__(limite_gravedad, categoria_equipo, certificacion)
         self._nominal_mm = nominal_mm
         self._tolerancia_mm = tolerancia_mm
