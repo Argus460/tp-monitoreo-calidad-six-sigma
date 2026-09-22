@@ -865,12 +865,12 @@ class Inspeccion:
     def __init__(self, muestra: Muestra, profesional: Profesional,
                  equipo: Equipo, procedimiento: Procedimiento, fecha: date):
         Validar.fecha(fecha, "fecha de inspección")
-        # FALTA FUNCIÓN -> DatosInvalidos si muestra.lote() is None: una
-        # muestra sin lote no se puede inspeccionar ni
-        # tendría lote para el reporte.
+        Inspeccion.contador += 1     
+        if muestra.lote() == None:
+            raise DatosInvalidos('La muestra no tiene un lote asignado')
+        else:
+            self._muestra = muestra        
         self._id = 'Insp' + str(Inspeccion.contador)
-        Inspeccion.contador += 1        
-        self._muestra = muestra
         self._profesional = profesional
         self._equipo = equipo
         self._procedimiento = procedimiento
@@ -878,7 +878,18 @@ class Inspeccion:
         self._ejecutada = False
         self._reporte: Reporte | None = None
 
+
+
     def validar_requisitos(self) -> None:
+        if self._procedimiento._certificacion != None and (self._profesional.tiene_certificacion_vigente(self._procedimiento._certificacion) == False or self._procedimiento._certificacion not in self._profesional._certificaciones):
+            raise CertificacionFaltante('El profesional no tiene la certificacion requerida')
+        elif self._equipo.es_apto(self._procedimiento._categoria_equipo, self._fecha) == False:
+            raise EquipoNoApto('EL equipo no es apto para realizar la inspeccion')
+        elif self._muestra._estado != 'PENDIENTE':
+            raise TransicionIlegal('La puestra ya fue cerrada')
+        else:
+            print('Requiitos validados')
+        
         """Chequea, en orden, las tres condiciones previas. Lanza la excepción
         que corresponda ANTES de tocar la muestra, para que un rechazo no deje
         efectos secundarios:
@@ -892,7 +903,6 @@ class Inspeccion:
         mal a la vez, la excepción que sale es la primera de la lista. Cada
         test debería romper un solo requisito por vez.
         """
-        # FALTA FUNCIÓN -> CertificacionFaltante, EquipoNoApto, TransicionIlegal
         pass
 
     def ejecutar(self, observaciones) -> Reporte | None:
@@ -936,27 +946,29 @@ class Inspeccion:
         """
         pass
 
-    def reporte(self) -> Reporte | None:
-        """El reporte emitido, o None si la muestra quedó conforme."""
-        pass
+    def get_reporte(self) -> Reporte | None:
+        if self._reporte == None:
+            return None
+        else:
+            return self._reporte
 
-    def id(self) -> str:
-        pass
+    def get_id(self) -> str:
+        return self._id
 
-    def fecha(self) -> date:
-        pass
+    def get_fecha(self) -> date:
+        return self._fecha
 
-    def muestra(self) -> Muestra:
-        pass
+    def get_muestra(self) -> Muestra:
+        return self._muestra
 
-    def profesional(self) -> Profesional:
-        pass
+    def get_profesional(self) -> Profesional:
+        return self._profesional
 
-    def equipo(self) -> Equipo:
-        pass
+    def get_equipo(self) -> Equipo:
+        return self._equipo
 
     def procedimiento(self) -> Procedimiento:
-        pass
+        return self._procedimiento
 
 
 # =====================================================================
