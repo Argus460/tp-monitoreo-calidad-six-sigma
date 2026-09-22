@@ -195,31 +195,31 @@ class Defecto:
         Validar.texto_no_vacio(descripcion, "descripcion")
         Validar.entero_en_rango(gravedad, Defecto.GRAVEDAD_MINIMA,
                                 Defecto.GRAVEDAD_MAXIMA, "gravedad")        
-        self._tipo = tipo
+        if tipo == 'dimensional' or tipo == 'visual':
+            self._tipo = tipo
+        else:
+            raise DatosInvalidos('el tipo debe ser dimensional o visual')        
         self._descripcion = descripcion
         self._gravedad = gravedad
         # dict() crea una copia: nadie de afuera conserva una referencia
         # al diccionario interno.
         self._datos_observacion = dict(datos_observacion)
 
-    def gravedad(self) -> int:
-        pass
+    def get_gravedad(self) -> int:
+        return self._gravedad
 
     def es_critico(self) -> bool:
-        """True si la gravedad es exactamente 5."""
-        pass
+        if self._gravedad == Defecto.GRAVEDAD_MAXIMA:
+            return True
 
-    def tipo(self) -> str:
-        """"dimensional" o "visual": el TIPO_DEFECTO del procedimiento que
-        lo produjo. Es la clave que usa Lote.contar_defectos_por_tipo()."""
-        pass
+    def get_tipo(self) -> str:
+        return self._tipo
 
-    def descripcion(self) -> str:
-        pass
+    def get_descripcion(self) -> str:
+        return self._descripcion
 
     def datos_observacion(self) -> dict:
-        """Copia del diccionario de datos propios de la observación."""
-        pass
+        return self._datos_observacion.copy()
 
     def __str__(self) -> str:
         pass
