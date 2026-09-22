@@ -32,6 +32,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import date
 from datetime import datetime
+from datetime import timedelta
 from enum import Enum
 
 
@@ -232,7 +233,6 @@ class Defecto:
 # emisión porque la regla 5 del enunciado no la usa: define la vigencia
 # como "inclusiva en la fecha de inspección", o sea un único borde.
 
-
 class Certificacion:
     """Una habilitación con fecha de vencimiento. CLASE INMUTABLE."""
 
@@ -245,13 +245,16 @@ class Certificacion:
     def esta_vigente(self, fecha: date) -> bool:
         """Vigente de forma inclusiva: fecha <= vencimiento.
         El día exacto del vencimiento todavía cuenta como vigente."""
-        pass
+        if fecha <= self._vencimiento:
+            return True
+        return False
 
-    def nombre(self) -> str:
-        pass
+    def get_nombre(self) -> str:
+        return self._nombre
 
-    def vencimiento(self) -> date:
-        pass
+    def get_vencimiento(self) -> date:
+        return self._vencimiento
+
 
 
 class Profesional:
@@ -270,17 +273,22 @@ class Profesional:
     def agregar_certificacion(self, cert: Certificacion) -> None:
         """Indexada por nombre. Agregar dos veces el mismo nombre reemplaza
         la anterior: representa una renovación, no un duplicado."""
-        pass
+        if not isinstance(cert, Certificacion):
+            raise DatosInvalidos("El objeto ingresado no es una Certificacion.")
+        self._certificaciones[cert.get_nombre()] = cert
 
     def tiene_certificacion_vigente(self, nombre: str, fecha: date) -> bool:
         """Dos cosas a la vez: que la tenga y que no esté vencida a esa fecha."""
-        pass
+        cert = self._certificaciones.get(nombre)
+        if cert is None:
+            return False
+        return cert.esta_vigente(fecha)
 
-    def id(self) -> str:
-        pass
+    def get_id(self) -> str:
+        return self._id
 
-    def nombre(self) -> str:
-        pass
+    def get_nombre(self) -> str:
+        return self._nombre
 
 
 # =====================================================================
@@ -310,20 +318,21 @@ class Equipo:
 
         El borde superior también importa: una calibración con fecha futura
         no es válida."""
-        pass
+        return fecha_inspeccion - timedelta(days=self.DIAS_VIGENCIA_CALIBRACION) <= self._fecha_calibracion <= fecha_inspeccion
 
     def es_apto(self, categoria_requerida: str, fecha_inspeccion: date) -> bool:
         """Categoría coincidente Y calibración vigente."""
-        pass
+        return self._categoria == categoria_requerida and self.calibracion_vigente(fecha_inspeccion)
 
-    def id(self) -> str:
-        pass
+    def get_id(self) -> str:
+        return self._id
 
-    def categoria(self) -> str:
-        pass
+    def get_categoria(self) -> str:
+        return self._categoria
 
-    def fecha_calibracion(self) -> date:
-        pass
+    def get_fecha_calibracion(self) -> date:
+        return self._fecha_calibracion
+
 
 
 # =====================================================================
