@@ -14,22 +14,24 @@ la colección interna.
 
 Orden del archivo:
     1. Excepciones
-    2. Estados (enums)
-    3. Defecto y sus subclases
-    4. Certificacion y Profesional
-    5. Equipo
-    6. Procedimiento y sus subclases
-    7. Muestra
-    8. Lote
-    9. Reporte
-   10. Inspeccion
-   11. Registro
+    2. Validaciones
+    3. Estados (enums)
+    4. Defecto y sus subclases
+    5. Certificacion y Profesional
+    6. Equipo
+    7. Procedimiento y sus subclases
+    8. Muestra
+    9. Lote
+    10. Reporte
+   11. Inspeccion
+   12. Registro
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import date
+from datetime import datetime
 from enum import Enum
 
 
@@ -46,9 +48,10 @@ class ErrorCalidad(Exception):
 
 
 class DatosInvalidos(ErrorCalidad):
-    """Id vacío o duplicado, cantidad no positiva, gravedad fuera de rango,
-    muestras que exceden la cantidad fabricada del lote, consultas sobre un
-    lote sin muestras."""
+    """Texto vacío, id duplicado o inexistente, cantidad no positiva,
+    gravedad fuera de rango, fecha que no es date, datos de observación
+    incoherentes con el procedimiento, muestras que exceden la cantidad
+    fabricada del lote, consultas sobre un lote sin muestras."""
     pass
 
 
@@ -63,13 +66,75 @@ class CertificacionFaltante(ErrorCalidad):
 
 
 class TransicionIlegal(ErrorCalidad):
-    """Cerrar una muestra ya cerrada, reinspeccionar, decidir un lote
-    incompleto o ya decidido."""
+    """Operación no permitida en el estado actual: cerrar una muestra ya
+    cerrada, registrar defectos fuera de EN_INSPECCION, reinspeccionar,
+    mover una muestra a otro lote, agregar muestras a un lote decidido,
+    decidir un lote incompleto o ya decidido."""
     pass
+
+# =====================================================================
+# 2. VALIDACIONES
+# =====================================================================
+# Chequeos de datos de entrada que se repiten en varias clases. Son
+# staticmethods porque no dependen de ningún objeto: reciben el valor y
+# el nombre del campo (solo para armar el mensaje), no devuelven nada si
+# el dato está bien y lanzan DatosInvalidos si está mal.
+#
+# Detalle que importa para los tests: en Python bool es subclase de int,
+# así que True pasaría como entero 1. Por eso se excluye explícitamente.
+
+
+class Validar:
+
+    @staticmethod
+    def texto_no_vacio(valor, campo: str) -> None:
+        """Un str con al menos un carácter que no sea espacio."""
+        if not isinstance(valor, str) or valor.strip() == "":
+            raise DatosInvalidos(
+                f"'{campo}' debe ser un texto no vacío (recibido: {valor!r}).")
+
+    @staticmethod
+    def entero_positivo(valor, campo: str) -> None:
+        """Un int estrictamente mayor que 0. No acepta float ni bool."""
+        if not Validar._es_entero(valor) or valor <= 0:
+            raise DatosInvalidos(
+                f"'{campo}' debe ser un entero positivo (recibido: {valor!r}).")
+
+    @staticmethod
+    def entero_en_rango(valor, minimo: int, maximo: int, campo: str) -> None:
+        """Un int entre minimo y maximo, ambos inclusive."""
+        if not Validar._es_entero(valor) or not (minimo <= valor <= maximo):
+            raise DatosInvalidos(
+                f"'{campo}' debe ser un entero entre {minimo} y {maximo} "
+                f"(recibido: {valor!r}).")
+
+    @staticmethod
+    def numero_positivo(valor, campo: str) -> None:
+        """Un int o float estrictamente mayor que 0. No acepta bool.
+        Se escribe 'not valor > 0' y no 'valor <= 0' para que un NaN
+        también sea rechazado (cualquier comparación con NaN da False)."""
+        if (isinstance(valor, bool) or not isinstance(valor, (int, float))
+                or not valor > 0):
+            raise DatosInvalidos(
+                f"'{campo}' debe ser un número positivo (recibido: {valor!r}).")
+
+    @staticmethod
+    def fecha(valor, campo: str) -> None:
+        """Un date. Se rechaza datetime a propósito: aunque es subclase de
+        date, comparar un datetime con un date lanza TypeError, y todo el
+        diseño trabaja con date."""
+        if isinstance(valor, datetime) or not isinstance(valor, date):
+            raise DatosInvalidos(
+                f"'{campo}' debe ser un date (recibido: {valor!r}).")
+
+    @staticmethod
+    def _es_entero(valor) -> bool:
+        return isinstance(valor, int) and not isinstance(valor, bool)
+
 
 
 # =====================================================================
-# 2. ESTADOS
+# 3. ESTADOS
 # =====================================================================
 # Se usan Enum en vez de strings para que sea imposible escribir un
 # estado con un typo.
@@ -95,35 +160,49 @@ class EstadoLote(Enum):
 
 
 # =====================================================================
-# 3. DEFECTOS
+# 4. DEFECTOS
 # =====================================================================
-# CLASES INMUTABLES: nacen completas en el __init__, no tienen setters,
-# sus atributos son privados y se leen por getters.
+# CLASE INMUTABLE: nace completa en el __init__, no tiene setters, sus
+# atributos son privados y se leen por getters.
 #
-# Defecto es abstracta y no recibe la gravedad como número: cada subclase
-# la deriva de sus propios datos. Eso es lo que justifica la jerarquía.
+# Es UNA SOLA clase concreta. Los datos específicos de cada observación
+# (valor_medido_mm y tolerancia_mm en uno dimensional, zona_afectada y
+# patron en uno visual) llegan por **datos_observacion y se guardan en un
+# diccionario. Cada procedimiento pasa solo los campos que le corresponden,
+# sin forzar parámetros vacíos en los demás.
 #
-# INVARIANTE DE LA JERARQUÍA: gravedad() siempre devuelve un entero entre
-# GRAVEDAD_MINIMA y GRAVEDAD_MAXIMA. Cada subclase es responsable de que
-# su fórmula no se salga del rango, con techo y con piso.
+# La gravedad llega ya calculada: la calcula el procedimiento, que es
+# quien tiene el criterio (regla 7). Defecto solo garantiza que esté en
+# rango (regla 3).
+#
+# POR QUÉ NO HAY SUBCLASES DE DEFECTO: como la gravedad la calcula el
+# procedimiento, un defecto dimensional y uno visual solo se diferencian
+# en qué campos guardan, y eso es exactamente lo que resuelve **kwargs.
+# La jerarquía de herencia del TP vive en Procedimiento, que es donde hay
+# comportamiento realmente distinto.
 
 
-class Defecto(ABC):
-    """Contrato común: todo defecto sabe decir su gravedad y si es crítico,
-    sin importar cómo la calculó."""
+class Defecto:
+    """Una desviación observada: tipo, descripción, gravedad y los datos
+    propios de la observación que la produjo."""
 
     GRAVEDAD_MINIMA = 1
     GRAVEDAD_MAXIMA = 5
     GRAVEDAD_CRITICA = 5
 
-    def __init__(self, tipo: str, descripcion: str):
-        # TODO: validar que tipo y descripcion no estén vacíos -> DatosInvalidos
+    def __init__(self, tipo: str, descripcion: str, gravedad: int, **datos_observacion):
+        Validar.texto_no_vacio(tipo, "tipo")
+        Validar.texto_no_vacio(descripcion, "descripcion")
+        Validar.entero_en_rango(gravedad, Defecto.GRAVEDAD_MINIMA,
+                                Defecto.GRAVEDAD_MAXIMA, "gravedad")        
         self._tipo = tipo
         self._descripcion = descripcion
+        self._gravedad = gravedad
+        # dict() crea una copia: nadie de afuera conserva una referencia
+        # al diccionario interno.
+        self._datos_observacion = dict(datos_observacion)
 
-    @abstractmethod
     def gravedad(self) -> int:
-        """Entero entre 1 y 5. Cada subclase lo calcula a su manera."""
         pass
 
     def es_critico(self) -> bool:
@@ -131,87 +210,23 @@ class Defecto(ABC):
         pass
 
     def tipo(self) -> str:
-        """La categoría del defecto. Es la clave que usa
-        Lote.contar_defectos_por_tipo() para agrupar."""
+        """"dimensional" o "visual": el TIPO_DEFECTO del procedimiento que
+        lo produjo. Es la clave que usa Lote.contar_defectos_por_tipo()."""
         pass
 
     def descripcion(self) -> str:
+        pass
+
+    def datos_observacion(self) -> dict:
+        """Copia del diccionario de datos propios de la observación."""
         pass
 
     def __str__(self) -> str:
         pass
 
 
-class DefectoDimensional(Defecto):
-    """Defecto de medición. Deriva su gravedad de cuántas veces se pasó
-    de la tolerancia admitida."""
-
-    def __init__(self, tipo: str, descripcion: str,
-                 desviacion_mm: float, tolerancia_mm: float):
-        super().__init__(tipo, descripcion)
-        # TODO: validar tolerancia_mm > 0 -> DatosInvalidos
-        # TODO: validar desviacion_mm > tolerancia_mm -> DatosInvalidos.
-        #       Una desviación que entra en tolerancia no es un defecto:
-        #       construir uno así sería un dato incoherente con el
-        #       procedimiento que supuestamente lo produjo (regla 3).
-        self._desviacion_mm = desviacion_mm
-        self._tolerancia_mm = tolerancia_mm
-
-    def gravedad(self) -> int:
-        """max(1, min(5, ceil(desviacion_mm / tolerancia_mm))).
-
-        Cuántas veces se pasó de la tolerancia, redondeado hacia arriba,
-        con techo en 5 y piso en 1.
-
-        El techo cumple GRAVEDAD_MAXIMA. El piso cumple GRAVEDAD_MINIMA y
-        es una segunda línea de defensa: la validación del __init__ ya
-        impide construir un defecto con desviación dentro de tolerancia,
-        pero sin el max() la fórmula podría devolver 0 y romper el
-        invariante de la jerarquía.
-
-        Por la vía normal (ProcedimientoDimensional) el valor cae entre 2
-        y 5: una medición dentro de tolerancia no llega a generar defecto,
-        así que la gravedad 1 no es alcanzable por este tipo. La gravedad
-        1 se produce por la vía visual."""
-        pass
-
-    def desviacion_mm(self) -> float:
-        pass
-
-    def tolerancia_mm(self) -> float:
-        pass
-
-
-class DefectoVisual(Defecto):
-    """Defecto de inspección visual. Pesa menos que el dimensional: salvo
-    que afecte una zona crítica, siempre devuelve el mismo valor fijo,
-    que le fija el procedimiento que lo produjo."""
-
-    def __init__(self, tipo: str, descripcion: str,
-                 zona: str, es_zona_critica: bool, gravedad_base: int):
-        super().__init__(tipo, descripcion)
-        # TODO: validar zona no vacía y gravedad_base entre 1 y 4
-        self._zona = zona
-        self._es_zona_critica = es_zona_critica
-        self._gravedad_base = gravedad_base
-
-    def gravedad(self) -> int:
-        """Zona crítica -> 5 (GRAVEDAD_CRITICA).
-        Cualquier otra zona -> gravedad_base, el valor fijo del procedimiento.
-
-        Como gravedad_base está validada entre 1 y 4, el resultado siempre
-        cae dentro del rango sin necesidad de recortarlo."""
-        pass
-
-    def zona(self) -> str:
-        pass
-
-    def es_zona_critica(self) -> bool:
-        pass
-
-
 # =====================================================================
-# 4. CERTIFICACION Y PROFESIONAL
+# 5. CERTIFICACION Y PROFESIONAL
 # =====================================================================
 # Certificacion guarda solo nombre y vencimiento. No lleva fecha de
 # emisión porque la regla 5 del enunciado no la usa: define la vigencia
@@ -222,7 +237,8 @@ class Certificacion:
     """Una habilitación con fecha de vencimiento. CLASE INMUTABLE."""
 
     def __init__(self, nombre: str, vencimiento: date):
-        # TODO: validar nombre no vacío -> DatosInvalidos
+        Validar.texto_no_vacio(nombre, "nombre de la certificación")
+        Validar.fecha(vencimiento, "vencimiento")        
         self._nombre = nombre
         self._vencimiento = vencimiento
 
@@ -245,7 +261,7 @@ class Profesional:
     contador = 0
     
     def __init__(self, nombre: str):
-        # TODO: validar id y nombre no vacíos -> DatosInvalidos
+        Validar.texto_no_vacio(nombre, "nombre del profesional")
         self._id = 'Prof' + str(Profesional.contador)
         Profesional.contador += 1
         self._nombre = nombre
@@ -268,7 +284,7 @@ class Profesional:
 
 
 # =====================================================================
-# 5. EQUIPO
+# 6. EQUIPO
 # =====================================================================
 # Responsable de su identidad, su categoría y su última calibración.
 # NO decide la conformidad de una muestra y NO realiza mediciones: la
@@ -281,7 +297,8 @@ class Equipo:
     contador = 0
 
     def __init__(self, categoria: str, fecha_calibracion: date):
-        # TODO: validar id y categoria no vacíos -> DatosInvalidos
+        Validar.texto_no_vacio(categoria, "categoria del equipo")
+        Validar.fecha(fecha_calibracion, "fecha_calibracion")
         self._id = 'Equip' + str(Equipo.contador)
         Equipo.contador += 1
         self._categoria = categoria
@@ -310,7 +327,7 @@ class Equipo:
 
 
 # =====================================================================
-# 6. PROCEDIMIENTOS
+# 7. PROCEDIMIENTOS
 # =====================================================================
 # Acá vive LA VARIACIÓN POLIMÓRFICA del trabajo práctico. Todos los
 # procedimientos exponen la misma operación observable, evaluar(), pero
@@ -321,30 +338,49 @@ class Equipo:
 # devuelve defectos nuevos en cada llamada. Eso es lo que permite que
 # Inspeccion pueda reintentar o descartar su resultado sin consecuencias.
 #
+# CAMPOS_OBSERVACION declara qué datos propios lleva cada defecto que el
+# procedimiento produce. La muestra los usa para rechazar datos
+# incoherentes (regla 3) sin necesidad de conocer al procedimiento.
+#
 # Un procedimiento NO aprueba el lote por sí solo.
 
 
 class Procedimiento(ABC):
     """Define sus requisitos (equipo y certificación), su límite de gravedad
     acumulada, y su criterio para convertir observaciones en defectos."""
+
+    CAMPOS_OBSERVACION: tuple[str] = tuple()
     contador = 0
 
     def __init__(self, limite_gravedad: int,
                  categoria_equipo: str, certificacion: str | None):
-        # TODO: validar id y categoria_equipo no vacíos, limite_gravedad > 0
-        self._id ='Proced' + str(Procedimiento.contador)
+        Validar.entero_positivo(limite_gravedad, "limite_gravedad")
+        Validar.texto_no_vacio(categoria_equipo, "categoria_equipo")
+        if certificacion is not None:
+            Validar.texto_no_vacio(certificacion, "certificacion")        
+            self._id ='Proced' + str(Procedimiento.contador)
+        self._id = 'Proced' + str(Procedimiento.contador)
         Procedimiento.contador += 1
         self._limite_gravedad = limite_gravedad
         self._categoria_equipo = categoria_equipo
         self._certificacion = certificacion
 
     @abstractmethod
-    def evaluar(self, observaciones) -> list[Defecto]:
-        """Convierte las observaciones crudas en cero o más defectos,
+    def evaluar(self, observaciones) -> list[dict]:
+        """Convierte las observaciones crudas en cero o más HALLAZGOS,
         según el criterio propio de cada procedimiento.
+
+        Cada hallazgo es un diccionario listo para desempaquetar en
+        muestra.registrar_defecto(**hallazgo): lleva las claves 'tipo'
+        (siempre el TIPO_DEFECTO del procedimiento), 'descripcion' y
+        'gravedad', más exactamente los CAMPOS_OBSERVACION del procedimiento.
 
         Si las observaciones vienen mal formadas, lanza DatosInvalidos.
         No modifica nada fuera de sí mismo."""
+        pass
+
+    def campos_observacion(self) -> tuple[str]:
+        """Los campos propios de sus defectos."""
         pass
 
     def limite_gravedad(self) -> int:
@@ -364,22 +400,42 @@ class Procedimiento(ABC):
 class ProcedimientoDimensional(Procedimiento):
     """Compara mediciones contra un valor nominal y su tolerancia."""
 
-    def __init__(self, id: str, limite_gravedad: int, categoria_equipo: str,
+    TIPO_DEFECTO = "dimensional"
+    CAMPOS_OBSERVACION = ("valor_medido_mm", "nominal_mm", "tolerancia_mm")
+
+    def __init__(self, limite_gravedad: int, categoria_equipo: str,
                  certificacion: str | None,
                  nominal_mm: float, tolerancia_mm: float):
-        super().__init__(id, limite_gravedad, categoria_equipo, certificacion)
-        # TODO: validar tolerancia_mm > 0 -> DatosInvalidos
+        
+        Validar.numero_positivo(nominal_mm, "nominal_mm")
+        Validar.numero_positivo(tolerancia_mm, "tolerancia_mm")        
+
+        super().__init__(limite_gravedad, categoria_equipo, certificacion)
         self._nominal_mm = nominal_mm
         self._tolerancia_mm = tolerancia_mm
 
-    def evaluar(self, mediciones: list[float]) -> list[DefectoDimensional]:
-        """Por cada medición fuera de nominal +/- tolerancia, genera un
-        DefectoDimensional con la desviación correspondiente. Las que caen
-        dentro de tolerancia no generan nada.
+    def evaluar(self, mediciones: list[float]) -> list[dict]:
+        """Por cada medición con desviacion = |medicion - nominal| mayor
+        que la tolerancia, genera un hallazgo con los campos
+        valor_medido_mm, nominal_mm y tolerancia_mm. Las que caen dentro
+        de tolerancia no generan nada.
 
-        Como solo fabrica defectos con desviación estrictamente mayor que
-        la tolerancia, nunca choca con la validación del __init__ de
-        DefectoDimensional."""
+        Gravedad: max(1, min(5, ceil(desviacion / tolerancia))).
+        Cuántas veces se pasó de la tolerancia, redondeado hacia arriba con
+        math.ceil, con techo en 5 y piso en 1. Por esta vía el valor cae
+        entre 2 y 5 (una medición dentro de tolerancia no genera hallazgo);
+        el piso es una segunda línea de defensa del rango 1..5.
+
+        FLOTANTES (problema aparte de ceil): |10.3 - 10.0| da
+        0.3000000000000007, y dividido 0.1 da 3.000000000000007, que con
+        ceil es 4 y no 3. Por eso la desviación y el cociente se redondean
+        a 6 decimales con round() antes de comparar y de aplicar ceil.
+
+        'mediciones' que no sea lista, o alguna medición que no sea número
+        -> DatosInvalidos (no TypeError: quien llama espera errores del
+        dominio)."""
+        # FALTA FUNCIÓN -> DatosInvalidos si mediciones no es lista o
+        #                  alguna medición no es número
         pass
 
     def nominal_mm(self) -> float:
@@ -395,21 +451,37 @@ class ProcedimientoVisual(Procedimiento):
     Fija la gravedad base que van a tener todos sus defectos no críticos:
     es el procedimiento el que decide cuánto pesa un hallazgo visual."""
 
-    def __init__(self, id: str, limite_gravedad: int, categoria_equipo: str,
+    TIPO_DEFECTO = "visual"
+    CAMPOS_OBSERVACION = ("zona_afectada", "patron")
+
+    def __init__(self, limite_gravedad: int, categoria_equipo: str,
                  certificacion: str | None,
-                 zonas_criticas: set[str], gravedad_base: int = 2):
-        super().__init__(id, limite_gravedad, categoria_equipo, certificacion)
-        # TODO: validar gravedad_base entre 1 y 4 -> DatosInvalidos
-        self._zonas_criticas = set(zonas_criticas)
+                 zonas_criticas: tuple[str], gravedad_base: int = 2):
+        if not isinstance(zonas_criticas, tuple):
+            raise DatosInvalidos(
+                f"'zonas_criticas' debe ser una tupla de textos "
+                f"(recibido: {zonas_criticas!r}).")
+        for zona in zonas_criticas:
+            Validar.texto_no_vacio(zona, "zona crítica")
+        # Hasta 4: el 5 queda reservado para las zonas críticas.
+        Validar.entero_en_rango(gravedad_base, Defecto.GRAVEDAD_MINIMA,
+                                Defecto.GRAVEDAD_CRITICA - 1, "gravedad_base")
+        super().__init__(limite_gravedad, categoria_equipo, certificacion)
+        self._zonas_criticas = tuple(zonas_criticas)
         self._gravedad_base = gravedad_base
 
-    def evaluar(self, hallazgos: list[dict]) -> list[DefectoVisual]:
-        """Por cada hallazgo genera un DefectoVisual, marcándolo como zona
-        crítica si la zona figura en _zonas_criticas, y pasándole la
-        gravedad base del procedimiento."""
+    def evaluar(self, hallazgos: list[dict]) -> list[dict]:
+        """Recibe diccionarios con 'zona_afectada' y 'patron'. Por cada uno
+        genera un hallazgo con esos dos campos y gravedad 5 si la zona
+        figura en _zonas_criticas, o gravedad_base en cualquier otro caso.
+        
+        'hallazgos' que no sea lista, o un hallazgo que no sea dict, sin
+        esas claves o con textos vacíos -> DatosInvalidos."""
+        # FALTA FUNCIÓN -> DatosInvalidos si hallazgos o un hallazgo están
+        # mal formados
         pass
 
-    def zonas_criticas(self) -> set[str]:
+    def zonas_criticas(self) -> tuple[str]:
         """Copia del conjunto de zonas críticas."""
         pass
 
@@ -418,32 +490,40 @@ class ProcedimientoVisual(Procedimiento):
 
 
 # =====================================================================
-# 7. MUESTRA
+# 8. MUESTRA
 # =====================================================================
 # Responsable de sus defectos, su estado y su resultado de conformidad.
 #
-# Punto clave del diseño: NO expone un agregar_defecto() público. Recibe
-# todos los defectos de una sola vez al cerrar y ahí los congela en una
-# tupla. Después del cierre, cualquier intento de modificación lanza
-# TransicionIlegal y deja el resultado intacto.
+# Punto clave del diseño: los defectos entran de a uno por
+# registrar_defecto(), pero SOLO mientras la muestra está EN_INSPECCION y
+# SOLO con los campos de observación del procedimiento en curso. Después
+# del cierre, el estado final bloquea cualquier alta (TransicionIlegal) y
+# los defectos solo se leen como tupla.
 #
-# La muestra NO conoce a su Procedimiento: recibe el límite de gravedad
-# como parámetro. Eso es lo que la desacopla de un tipo de procedimiento.
+# La muestra NO conoce a su Procedimiento: recibe el límite de gravedad y
+# los campos de observación como datos. Eso es lo que la desacopla de un
+# tipo de procedimiento.
 #
-# QUIÉN LLAMA A LAS TRANSICIONES: marcar_en_inspeccion(), cerrar() y
-# revertir_a_pendiente() son públicas porque Python no tiene visibilidad
-# de paquete, pero su único llamador legítimo es Inspeccion.ejecutar().
-# La encapsulación real la dan las precondiciones: cada una verifica el
-# estado de partida y lanza TransicionIlegal si no corresponde, así que
-# ninguna secuencia inválida puede dejar la muestra en un estado incoherente.
-
+# QUIÉN LLAMA A LAS TRANSICIONES: marcar_en_inspeccion(),
+# registrar_defecto(), cerrar() y revertir_a_pendiente() son públicas
+# porque Python no tiene visibilidad de paquete, pero su único llamador
+# legítimo es Inspeccion.ejecutar(). La encapsulación real la dan las
+# precondiciones: cada una verifica el estado de partida y lanza
+# TransicionIlegal si no corresponde, así que ninguna secuencia inválida
+# puede dejar la muestra en un estado incoherente.
+#
+# LÍMITE CONOCIDO: lo que las precondiciones no pueden garantizar es que
+# se hayan validado profesional y equipo, ni que se emita el reporte. Eso
+# lo garantiza solo el camino Inspeccion.ejecutar(). Llamar a las
+# transiciones a mano desde afuera es usar mal la clase, y así queda
+# documentado.
 
 class Muestra:
 
     contador = 0
 
     def __init__(self, unidades: int):
-        # TODO: validar id no vacío y unidades entero > 0 -> DatosInvalidos
+        Validar.entero_positivo(unidades, "unidades")
         self._id = 'Mue' + str(Muestra.contador)
         Muestra.contador += 1
         self._unidades = unidades
@@ -457,6 +537,7 @@ class Muestra:
         """Solo la llama Lote.agregar_muestra(). Se puede asignar una única
         vez: un segundo intento lanza TransicionIlegal, porque una muestra
         no puede moverse a otro lote."""
+        # FALTA FUNCIÓN -> TransicionIlegal si self._lote ya no es None
         pass
 
     def lote(self) -> Lote | None:
@@ -464,10 +545,59 @@ class Muestra:
 
     # --- transiciones -----------------------------------------------
 
-    def marcar_en_inspeccion(self) -> None:
+    def marcar_en_inspeccion(self, campos_observacion: tuple[str]) -> None:
         """Solo desde PENDIENTE. Si no, TransicionIlegal.
-        Único llamador legítimo: Inspeccion.ejecutar()."""
+        
+        Guarda los campos de observación del procedimiento en curso: son
+        los que registrar_defecto() exige. Quedan fijos hasta el cierre,
+        así los requisitos no cambian durante la ejecución (regla 6).
+        Único llamador legítimo: Inspeccion.ejecutar().
+        """
+        # FALTA FUNCIÓN -> TransicionIlegal si el estado no es PENDIENTE
         pass
+
+    def registrar_defecto(self, tipo: str, descripcion: str, gravedad: int,
+                          **datos_observacion) -> None:
+        """Registra un defecto en la muestra incluyendo los datos
+        específicos de la observación.
+
+        Cada procedimiento genera observaciones con campos distintos: uno
+        dimensional registra valor_medido_mm, nominal_mm y tolerancia_mm;
+        uno visual registra zona_afectada y patron. Con **kwargs cada
+        procedimiento pasa solo los atributos que le corresponden.
+
+        Validaciones, en este orden y ANTES de tocar _defectos:
+        1. La muestra está EN_INSPECCION -> si no, TransicionIlegal.
+           Cubre "no registrar defectos ajenos a la inspección en curso"
+           (regla 7) y "no agregar defectos a una muestra cerrada" (regla 9).
+        2. Los campos recibidos son exactamente los del procedimiento en
+           curso, ni uno más ni uno menos -> si no, DatosInvalidos (regla 3).
+        3. tipo, descripcion y gravedad son válidos -> si no, DatosInvalidos.
+           Esta la hace el __init__ de Defecto.
+
+        Único llamador legítimo: Inspeccion.ejecutar(), que desempaqueta
+        cada hallazgo de evaluar() con muestra.registrar_defecto(**hallazgo).
+        """
+        # 1. Estado
+        if self._estado is not EstadoMuestra.EN_INSPECCION:
+            raise TransicionIlegal(
+                f"La muestra {self._id} está en estado "
+                f"{self._estado.value}: solo admite defectos EN_INSPECCION.")
+
+        # 2. Coherencia de los datos con el procedimiento en curso
+        recibidos = tuple(datos_observacion)
+        if recibidos != self._campos_observacion:
+            faltan = sorted(self._campos_observacion - recibidos)
+            sobran = sorted(recibidos - self._campos_observacion)
+            raise DatosInvalidos(
+                f"Datos de observación incoherentes con el procedimiento "
+                f"en curso (faltan: {faltan}, sobran: {sobran}).")
+
+        # 3. Construcción: Defecto valida tipo, descripcion y gravedad
+        defecto = Defecto(tipo, descripcion, gravedad, **datos_observacion)
+
+        # Recién ahora, con todo validado, se toca la colección interna.
+        self._defectos.append(defecto)
 
     def revertir_a_pendiente(self) -> None:
         """ROLLBACK, no una transición del ciclo de vida normal.
@@ -482,16 +612,20 @@ class Muestra:
         _defectos sigue vacío. Desde cualquier otro estado, TransicionIlegal.
         Eso garantiza que nunca pueda usarse para reabrir una muestra ya
         cerrada: CONFORME y NO_CONFORME siguen siendo finales."""
+        # FALTA FUNCIÓN -> TransicionIlegal si el estado no es EN_INSPECCION
         pass
 
-    def cerrar(self, defectos: list[Defecto], limite: int) -> EstadoMuestra:
-        """Congela los defectos y aplica el criterio de conformidad:
+    def cerrar(self, limite: int) -> EstadoMuestra:
+        """Aplica el criterio de conformidad sobre los defectos registrados:
         NO_CONFORME si hay al menos un defecto de gravedad 5, o si la suma
         de gravedades es estrictamente mayor que 'limite'. Si no, CONFORME.
-        Ambos estados son finales; un segundo llamado lanza TransicionIlegal
-        sin tocar el resultado ni los defectos existentes.
+
+        Solo desde EN_INSPECCION. Ambos estados son finales; un segundo
+        llamado lanza TransicionIlegal sin tocar el resultado ni los
+        defectos existentes.
 
         Único llamador legítimo: Inspeccion.ejecutar()."""
+        # FALTA FUNCIÓN -> TransicionIlegal si el estado no es EN_INSPECCION
         pass
 
     # --- consultas --------------------------------------------------
@@ -529,7 +663,7 @@ class Muestra:
 
 
 # =====================================================================
-# 8. LOTE
+# 9. LOTE
 # =====================================================================
 # Responsable de su identidad, su cantidad fabricada, sus muestras y su
 # estado. NO ejecuta mediciones.
@@ -547,8 +681,9 @@ class Lote:
 
     UMBRAL_RECHAZO_PORCENTUAL = 5.0
     contador = 0
+
     def __init__(self, cantidad_fabricada: int):
-        # TODO: validar id no vacío y cantidad_fabricada entero > 0
+        Validar.entero_positivo(cantidad_fabricada, "cantidad_fabricada")
         self._id = 'Lot' + str(Lote.contador)
         Lote.contador += 1
         self._cantidad_fabricada = cantidad_fabricada
@@ -558,17 +693,22 @@ class Lote:
     # --- alta de muestras -------------------------------------------
 
     def agregar_muestra(self, muestra: Muestra) -> None:
-        """Valida las tres condiciones ANTES de tocar el diccionario interno:
+        """Valida las cuatro condiciones ANTES de tocar el diccionario interno:
 
-        1. que la muestra no pertenezca ya a un lote (muestra.lote() is None)
+        1. que el lote siga ABIERTO -> TransicionIlegal. Agregar una muestra
+           pendiente a un lote ya decidido contradiría una decisión final.
+        2. que la muestra no pertenezca ya a un lote (muestra.lote() is None)
            -> TransicionIlegal
-        2. que su id no se repita dentro de este lote -> DatosInvalidos
-        3. que la suma de unidades no supere cantidad_fabricada
+        3. que su id no se repita dentro de este lote -> DatosInvalidos.
+           Con ids autoincrementales es defensiva: el caso "misma muestra
+           dos veces" ya lo corta la condición 2.
+        4. que la suma de unidades no supere cantidad_fabricada
            -> DatosInvalidos
 
-        Recién si las tres pasan, la incorpora al diccionario y llama a
+        Recién si las cuatro pasan, la incorpora al diccionario y llama a
         muestra.asignar_lote(self). Validar primero es lo que garantiza que
         un rechazo no deje la muestra a medio agregar en el lote equivocado."""
+        # FALTA FUNCIÓN -> TransicionIlegal (1, 2) y DatosInvalidos (3, 4)
         pass
 
     def unidades_asignadas(self) -> int:
@@ -611,10 +751,15 @@ class Lote:
     # --- decisión final ---------------------------------------------
 
     def decidir(self) -> EstadoLote:
-        """Requiere al menos una muestra y que todas estén cerradas; si no,
-        TransicionIlegal. RECHAZADO si el porcentaje no conforme es
-        estrictamente mayor que 5 %; con exactamente 5 % queda APROBADO.
-        La decisión es final: un segundo llamado lanza TransicionIlegal."""
+        """Validaciones, en este orden:
+        1. Lote ya decidido -> TransicionIlegal (la decisión es final)
+        2. Lote sin muestras -> DatosInvalidos (misma regla que
+           porcentaje_no_conformes())
+        3. Alguna muestra sin cerrar -> TransicionIlegal
+
+        RECHAZADO si el porcentaje no conforme es estrictamente mayor que
+        5 %; con exactamente 5 % queda APROBADO."""
+        # FALTA FUNCIÓN -> TransicionIlegal (1, 3) y DatosInvalidos (2)
         pass
 
     def id(self) -> str:
@@ -631,7 +776,7 @@ class Lote:
 
 
 # =====================================================================
-# 9. REPORTE
+# 10. REPORTE
 # =====================================================================
 # CLASE INMUTABLE. Recibe la tupla de defectos ya congelada desde
 # muestra.defectos(); no la genera él. Como los Defecto son inmutables,
@@ -647,11 +792,21 @@ class Lote:
 
 
 class Reporte:
+
     contador = 0
+
     def __init__(self, muestra: Muestra, lote: Lote,
                  profesional: Profesional, fecha: date,
                  defectos: tuple[Defecto, ...]):
-        # TODO: validar id no vacío -> DatosInvalidos
+        Validar.fecha(fecha, "fecha del reporte")
+        # Una muestra no conforme siempre tiene al menos un defecto (un
+        # crítico, o una suma mayor que un límite positivo). Un reporte
+        # sin causas sería incoherente.
+        if not isinstance(defectos, tuple) or not defectos:
+            raise DatosInvalidos(
+                "Un reporte necesita una tupla con al menos un defecto.")
+        # FALTA FUNCIÓN -> DatosInvalidos si muestra.lote() no es 'lote'
+        # o si la muestra no es no conforme
         self._id = 'Rep' + str(Reporte.contador)
         Reporte.contador += 1        
         self._muestra = muestra
@@ -690,7 +845,7 @@ class Reporte:
 
 
 # =====================================================================
-# 10. INSPECCION
+# 11. INSPECCION
 # =====================================================================
 # La ORQUESTADORA del sistema. Es la única clase que ve a los cuatro
 # participantes al mismo tiempo (muestra, profesional, equipo,
@@ -706,11 +861,14 @@ class Reporte:
 class Inspeccion:
 
     PREFIJO_REPORTE = "REP-"
-
     contador = 0
-    def __init__(self, id: str, muestra: Muestra, profesional: Profesional,
+
+    def __init__(self, muestra: Muestra, profesional: Profesional,
                  equipo: Equipo, procedimiento: Procedimiento, fecha: date):
-        # TODO: validar id no vacío -> DatosInvalidos
+        Validar.fecha(fecha, "fecha de inspección")
+        # FALTA FUNCIÓN -> DatosInvalidos si muestra.lote() is None: una
+        # muestra sin lote no se puede inspeccionar ni
+        # tendría lote para el reporte.
         self._id = 'Insp' + str(Inspeccion.contador)
         Inspeccion.contador += 1        
         self._muestra = muestra
@@ -735,6 +893,7 @@ class Inspeccion:
         mal a la vez, la excepción que sale es la primera de la lista. Cada
         test debería romper un solo requisito por vez.
         """
+        # FALTA FUNCIÓN -> CertificacionFaltante, EquipoNoApto, TransicionIlegal
         pass
 
     def ejecutar(self, observaciones) -> Reporte | None:
@@ -742,16 +901,28 @@ class Inspeccion:
 
         1. Si esta inspección ya se ejecutó -> TransicionIlegal
         2. validar_requisitos()
-        3. muestra.marcar_en_inspeccion()
+        3. muestra.marcar_en_inspeccion(procedimiento.campos_observacion())
         4. Dentro de un try:
-               defectos = procedimiento.evaluar(observaciones)
-               muestra.cerrar(defectos, procedimiento.limite_gravedad())
+                hallazgos = procedimiento.evaluar(observaciones)
+                for hallazgo in hallazgos:
+                    muestra.registrar_defecto(**hallazgo)
+                muestra.cerrar(procedimiento.limite_gravedad())
            Si algo de eso falla, se llama a muestra.revertir_a_pendiente()
            y se relanza la excepción original sin envolverla.
-        5. Si quedó no conforme -> construye el Reporte con id
+        5. Marca _ejecutada = True. Solo se marca si todo salió bien: una
+           ejecución que falló y se revirtió puede reintentarse con la
+           misma inspección y observaciones corregidas.
+        6. Si quedó no conforme -> construye el Reporte con id
            PREFIJO_REPORTE + self._id y lo devuelve.
            Si quedó conforme -> devuelve None.
 
+        POR QUÉ EL REPORTE VA FUERA DEL try: cuando se construye, la
+        muestra ya está cerrada y no se puede revertir. Entonces el Reporte
+        no puede fallar, porque una muestra no conforme sin reporte rompe
+        la regla 10. Por eso todo lo que Reporte valida está garantizado
+        antes: la fecha y el lote de la muestra los chequea el __init__ de
+        Inspeccion, y una muestra no conforme siempre tiene defectos.   
+        
         POR QUÉ EL ROLLBACK: evaluar() puede fallar con observaciones mal
         formadas, y para entonces la muestra ya está EN_INSPECCION. Sin
         rollback quedaría trabada ahí para siempre: no vuelve a ser
@@ -790,12 +961,19 @@ class Inspeccion:
 
 
 # =====================================================================
-# 11. REGISTRO
+# 12. REGISTRO
 # =====================================================================
 # Garantiza que los identificadores sean únicos dentro de cada categoría.
-# Es la única puerta de entrada para dar de alta entidades: sin él, la
-# unicidad quedaría a cargo de quien crea los objetos, y ahí es donde se
-# rompe. Guarda además las inspecciones y los reportes emitidos.
+# Es la única puerta de entrada para dar de alta entidades.
+#
+# Con ids autoincrementales, dos objetos distintos ya nacen con ids
+# distintos. El Registro sigue siendo la barrera para lo que el contador
+# no cubre: registrar dos veces el mismo objeto, o ids repetidos si un
+# test reinicia un contador.
+#
+# Todas las categorías, incluidas inspecciones y reportes, son
+# diccionarios indexados por id: la unicidad se chequea con 'in' en vez
+# de recorrer una lista, y obtener por id es directo.
 
 
 class Registro:
@@ -805,13 +983,14 @@ class Registro:
         self._profesionales: dict[str, Profesional] = {}
         self._equipos: dict[str, Equipo] = {}
         self._procedimientos: dict[str, Procedimiento] = {}
-        self._inspecciones: list[Inspeccion] = []
-        self._reportes: list[Reporte] = []
+        self._inspecciones: dict[str, Inspeccion] = {}
+        self._reportes: dict[str, Reporte] = {}
 
     # --- altas ------------------------------------------------------
+    # FALTA FUNCIÓN (todas las altas) -> DatosInvalidos si el id ya existe
+    # en su categoría.
 
     def registrar_lote(self, lote: Lote) -> None:
-        """Id duplicado dentro de la categoría -> DatosInvalidos."""
         pass
 
     def registrar_profesional(self, profesional: Profesional) -> None:
@@ -824,19 +1003,19 @@ class Registro:
         pass
 
     def registrar_inspeccion(self, inspeccion: Inspeccion) -> None:
-        """Valida id único e incorpora la inspección a la lista."""
         pass
 
     def registrar_reporte(self, reporte: Reporte) -> None:
-        """Valida id único -> DatosInvalidos. Como el id del reporte deriva
-        del id de la inspección, un duplicado acá delata que se emitieron
-        dos reportes para la misma inspección."""
+        """Como el id del reporte deriva del id de la inspección, un
+        duplicado acá delata que se emitieron dos reportes para la misma
+        inspección."""
         pass
 
     # --- consultas --------------------------------------------------
+    # FALTA FUNCIÓN (todos los obtener_*) -> DatosInvalidos si el id no existe.
+
 
     def obtener_lote(self, id: str) -> Lote:
-        """Id inexistente -> DatosInvalidos."""
         pass
 
     def obtener_profesional(self, id: str) -> Profesional:
