@@ -221,8 +221,8 @@ class Defecto:
     def datos_observacion(self) -> dict:
         return self._datos_observacion.copy()
 
-def __str__(self) -> str:
-    return f'tipo:{self._tipo} - descripcion:{self._descripcion} - gravedad:{self._gravedad}'
+    def __str__(self) -> str:
+        return f'tipo:{self._tipo} - descripcion:{self._descripcion} - gravedad:{self._gravedad}'
 
 
 # =====================================================================
