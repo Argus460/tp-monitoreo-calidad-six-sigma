@@ -562,8 +562,9 @@ class Muestra:
         Muestra.contador += 1
         self._unidades = unidades
         self._estado = EstadoMuestra.PENDIENTE
-        self._defectos: tuple[Defecto, ...] = ()
+        self._defectos: list[Defecto] = []
         self._lote: Lote | None = None  # lo asigna lote.agregar_muestra()
+        self._campos_observacion = None
 
     # --- pertenencia ------------------------------------------------
 
@@ -571,11 +572,14 @@ class Muestra:
         """Solo la llama Lote.agregar_muestra(). Se puede asignar una única
         vez: un segundo intento lanza TransicionIlegal, porque una muestra
         no puede moverse a otro lote."""
-        # FALTA FUNCIÓN -> TransicionIlegal si self._lote ya no es None
-        pass
 
-    def lote(self) -> Lote | None:
-        pass
+        if self._lote is not None:
+            raise TransicionIlegal("La muestra ya pertenece a un lote")
+
+        self._lote = lote
+
+    def get_lote(self) -> Lote | None:
+        return self._lote
 
     # --- transiciones -----------------------------------------------
 
@@ -587,8 +591,11 @@ class Muestra:
         así los requisitos no cambian durante la ejecución (regla 6).
         Único llamador legítimo: Inspeccion.ejecutar().
         """
-        # FALTA FUNCIÓN -> TransicionIlegal si el estado no es PENDIENTE
-        pass
+        if self._estado is not EstadoMuestra.PENDIENTE:
+            raise TransicionIlegal("La muestra no está pendiente.")
+
+        self._campos_observacion = campos_observacion
+        self._estado = EstadoMuestra.EN_INSPECCION
 
     def registrar_defecto(self, tipo: str, descripcion: str, gravedad: int,
                           **datos_observacion) -> None:
@@ -620,12 +627,21 @@ class Muestra:
 
         # 2. Coherencia de los datos con el procedimiento en curso
         recibidos = tuple(datos_observacion)
-        if recibidos != self._campos_observacion:
-            faltan = sorted(self._campos_observacion - recibidos)
-            sobran = sorted(recibidos - self._campos_observacion)
+        faltan = []
+        for campo in self._campos_observacion:
+            if campo not in recibidos:
+                faltan.append(campo)
+
+        sobran = []
+        for campo in recibidos:
+            if campo not in self._campos_observacion:
+                sobran.append(campo)
+
+        if faltan or sobran:
             raise DatosInvalidos(
                 f"Datos de observación incoherentes con el procedimiento "
                 f"en curso (faltan: {faltan}, sobran: {sobran}).")
+
 
         # 3. Construcción: Defecto valida tipo, descripcion y gravedad
         defecto = Defecto(tipo, descripcion, gravedad, **datos_observacion)
@@ -642,12 +658,26 @@ class Muestra:
         en las observaciones no la deje atrapada en EN_INSPECCION y, con
         ella, al lote entero sin poder decidirse.
 
-        Precondiciones estrictas: solo desde EN_INSPECCION y solo si
-        _defectos sigue vacío. Desde cualquier otro estado, TransicionIlegal.
-        Eso garantiza que nunca pueda usarse para reabrir una muestra ya
-        cerrada: CONFORME y NO_CONFORME siguen siendo finales."""
-        # FALTA FUNCIÓN -> TransicionIlegal si el estado no es EN_INSPECCION
-        pass
+        ROLLBACK de una inspección fallida. Solo se puede ejecutar desde 
+        EN_INSPECCION. Elimina los defectos registrados durante ese intento, 
+        borra los campos de observación y vuelve la muestra a PENDIENTE."""
+
+        if self._estado is not EstadoMuestra.EN_INSPECCION:
+            raise TransicionIlegal("La muestra no está en inspección")
+
+        self._defectos = []
+        self._campos_observacion = None
+        self._estado = EstadoMuestra.PENDIENTE
+
+    def suma_gravedades(self) -> int:
+        """Suma manual de las gravedades de los defectos."""
+
+        suma = 0
+
+        for defecto in self._defectos:
+            suma += defecto.get_gravedad()
+
+        return suma
 
     def cerrar(self, limite: int) -> EstadoMuestra:
         """Aplica el criterio de conformidad sobre los defectos registrados:
@@ -659,41 +689,57 @@ class Muestra:
         defectos existentes.
 
         Único llamador legítimo: Inspeccion.ejecutar()."""
-        # FALTA FUNCIÓN -> TransicionIlegal si el estado no es EN_INSPECCION
-        pass
+
+        if self._estado is not EstadoMuestra.EN_INSPECCION:
+            raise TransicionIlegal("La muestra no está en inspección")
+
+        hay_critico = False
+
+        for defecto in self._defectos:
+            if defecto.es_critico():
+                hay_critico = True
+
+        if hay_critico or self.suma_gravedades() > limite:
+            self._estado = EstadoMuestra.NO_CONFORME
+        else:
+            self._estado = EstadoMuestra.CONFORME
+
+        return self._estado
 
     # --- consultas --------------------------------------------------
 
     def esta_pendiente(self) -> bool:
-        pass
+        return self._estado is EstadoMuestra.PENDIENTE
 
     def esta_cerrada(self) -> bool:
         """True si el estado es CONFORME o NO_CONFORME."""
-        pass
+        esta_conforme = self._estado is EstadoMuestra.CONFORME
+        esta_no_conforme = self._estado is EstadoMuestra.NO_CONFORME
+
+        cerrada = esta_conforme or esta_no_conforme
+
+        return cerrada
 
     def es_no_conforme(self) -> bool:
         """Solo tiene sentido después del cierre."""
-        pass
+        no_conforme = self._estado is EstadoMuestra.NO_CONFORME
+        return no_conforme
 
     def defectos(self) -> tuple[Defecto, ...]:
         """Copia inmutable. Nunca devuelve la colección interna."""
-        pass
+        return tuple(self._defectos)
 
-    def suma_gravedades(self) -> int:
-        """Suma manual de las gravedades de los defectos."""
-        pass
+    def get_id(self) -> str:
+        return self._id
 
-    def id(self) -> str:
-        pass
+    def get_unidades(self) -> int:
+        return self._unidades
 
-    def unidades(self) -> int:
-        pass
-
-    def estado(self) -> EstadoMuestra:
-        pass
+    def get_estado(self) -> EstadoMuestra:
+        return self._estado
 
     def __str__(self) -> str:
-        pass
+        return f'id:{self._id} - unidades:{self._unidades} - estado:{self._estado.value} - defectos:{len(self._defectos)}'
 
 
 # =====================================================================
