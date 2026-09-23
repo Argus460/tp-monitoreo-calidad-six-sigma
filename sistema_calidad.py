@@ -35,6 +35,7 @@ from datetime import datetime
 from datetime import timedelta
 from enum import Enum
 
+import math
 
 # =====================================================================
 # 1. EXCEPCIONES
@@ -52,7 +53,9 @@ class DatosInvalidos(ErrorCalidad):
     """Texto vacío, id duplicado o inexistente, cantidad no positiva,
     gravedad fuera de rango, fecha que no es date, datos de observación
     incoherentes con el procedimiento, muestras que exceden la cantidad
-    fabricada del lote, consultas sobre un lote sin muestras."""
+    fabricada del lote, consultas sobre un lote sin muestras, muestra sin
+    lote al inspeccionar, reporte incoherente (muestra conforme, de otro
+    lote, o defectos que no son los de la muestra)."""
     pass
 
 
@@ -748,20 +751,18 @@ class Muestra:
 # Responsable de su identidad, su cantidad fabricada, sus muestras y su
 # estado. NO ejecuta mediciones.
 #
+# Las muestras se guardan en un diccionario {id_muestra: muestra}. Así
+# "¿este id ya está en el lote?" se responde con 'in', sin recorrer nada.
+#
 # REGLA: un lote sin muestras no es evaluable. Ni porcentaje_no_conformes()
 # ni decidir() tienen sentido sobre un conjunto vacío, así que ambos lanzan
 # una excepción en vez de inventar un 0 %.
-#
-# Ojo con la separación entre porcentaje_no_conformes() y decidir(): la
-# primera es una consulta pura que se puede llamar mil veces sin efectos;
-# la segunda es una transición final.
-
-
+ 
 class Lote:
-
+ 
     UMBRAL_RECHAZO_PORCENTUAL = 5.0
     contador = 0
-
+ 
     def __init__(self, cantidad_fabricada: int):
         Validar.entero_positivo(cantidad_fabricada, "cantidad_fabricada")
         self._id = 'Lot' + str(Lote.contador)
@@ -769,161 +770,309 @@ class Lote:
         self._cantidad_fabricada = cantidad_fabricada
         self._muestras: dict[str, Muestra] = {}
         self._estado = EstadoLote.ABIERTO
-
+ 
     # --- alta de muestras -------------------------------------------
-
+ 
     def agregar_muestra(self, muestra: Muestra) -> None:
-        """Valida las cuatro condiciones ANTES de tocar el diccionario interno:
-
-        1. que el lote siga ABIERTO -> TransicionIlegal. Agregar una muestra
+        """Valida cinco condiciones ANTES de tocar el diccionario interno:
+ 
+        1. que lo recibido sea una Muestra -> DatosInvalidos
+        2. que el lote siga ABIERTO -> TransicionIlegal. Agregar una muestra
            pendiente a un lote ya decidido contradiría una decisión final.
-        2. que la muestra no pertenezca ya a un lote (muestra.lote() is None)
-           -> TransicionIlegal
-        3. que su id no se repita dentro de este lote -> DatosInvalidos.
+        3. que la muestra no pertenezca ya a un lote -> TransicionIlegal
+        4. que su id no se repita dentro de este lote -> DatosInvalidos.
            Con ids autoincrementales es defensiva: el caso "misma muestra
-           dos veces" ya lo corta la condición 2.
-        4. que la suma de unidades no supere cantidad_fabricada
+           dos veces" ya lo corta la condición 3.
+        5. que la suma de unidades no supere cantidad_fabricada
            -> DatosInvalidos
-
-        Recién si las cuatro pasan, la incorpora al diccionario y llama a
+ 
+        Recién si las cinco pasan, la incorpora al diccionario y llama a
         muestra.asignar_lote(self). Validar primero es lo que garantiza que
         un rechazo no deje la muestra a medio agregar en el lote equivocado."""
-        # FALTA FUNCIÓN -> TransicionIlegal (1, 2) y DatosInvalidos (3, 4)
-        pass
-
+        # 1. Tipo
+        if not isinstance(muestra, Muestra):
+            raise DatosInvalidos(
+                f"Solo se pueden agregar muestras (recibido: {muestra!r}).")
+ 
+        # 2. Lote abierto
+        if self._estado is not EstadoLote.ABIERTO:
+            raise TransicionIlegal(
+                f"El lote {self._id} ya fue decidido "
+                f"({self._estado.value}): no admite muestras nuevas.")
+ 
+        # 3. Muestra sin lote
+        if muestra.get_lote() is not None:
+            raise TransicionIlegal(
+                f"La muestra {muestra.get_id()} ya pertenece a un lote.")
+ 
+        # 4. Id no repetido
+        if muestra.get_id() in self._muestras:
+            raise DatosInvalidos(
+                f"El lote {self._id} ya tiene una muestra con id "
+                f"{muestra.get_id()}.")
+ 
+        # 5. Unidades dentro de la cantidad fabricada
+        total = self.unidades_asignadas() + muestra.get_unidades()
+        if total > self._cantidad_fabricada:
+            raise DatosInvalidos(
+                f"Con la muestra {muestra.get_id()} el lote tendría {total} "
+                f"unidades asignadas, pero solo se fabricaron "
+                f"{self._cantidad_fabricada}.")
+ 
+        # Todo validado: recién ahora se modifican el lote y la muestra.
+        self._muestras[muestra.get_id()] = muestra
+        muestra.asignar_lote(self)
+ 
     def unidades_asignadas(self) -> int:
         """Suma manual de las unidades de todas las muestras."""
-        pass
-
+        suma = 0
+        for muestra in self._muestras.values():
+            suma += muestra.get_unidades()
+        return suma
+ 
     # --- consultas sin efectos secundarios --------------------------
-
+ 
     def todas_cerradas(self) -> bool:
         """Ninguna muestra en PENDIENTE ni EN_INSPECCION.
         Sobre un lote sin muestras devuelve True de forma trivial; por eso
         decidir() chequea aparte que haya al menos una."""
-        pass
-
+        for muestra in self._muestras.values():
+            if not muestra.esta_cerrada():
+                return False
+        return True
+ 
     def porcentaje_no_conformes(self) -> float:
-        """no_conformes / totales * 100, sin redondear.
-        Cálculo preliminar: no cambia el estado del lote.
-
+        """muestras no conformes / muestras totales * 100, sin redondear.
+        Cálculo preliminar: no cambia el estado del lote, y se puede pedir
+        aunque queden muestras abiertas (esas no cuentan como no conformes).
+        Es la misma fórmula de la consigna.
+ 
         Un lote sin muestras lanza DatosInvalidos: el porcentaje de un
         conjunto vacío no significa nada y devolver 0.0 daría a entender,
         falsamente, que el lote está en condiciones de aprobarse."""
-        pass
-
+        total = len(self._muestras)
+        if total == 0:
+            raise DatosInvalidos(
+                f"El lote {self._id} no tiene muestras: no se puede calcular "
+                f"el porcentaje de no conformes.")
+ 
+        no_conformes = 0
+        for muestra in self._muestras.values():
+            if muestra.es_no_conforme():
+                no_conformes += 1
+ 
+        return no_conformes / total * 100
+ 
     def contar_criticos(self) -> int:
         """Total de defectos de gravedad 5, considerando solo muestras
         cerradas. Sin efectos secundarios. Un lote sin muestras cerradas
         devuelve 0: acá el conjunto vacío sí tiene un resultado con sentido."""
-        pass
-
+        criticos = 0
+        for muestra in self._muestras.values():
+            if muestra.esta_cerrada():
+                for defecto in muestra.defectos():
+                    if defecto.es_critico():
+                        criticos += 1
+        return criticos
+ 
     def contar_defectos_por_tipo(self) -> dict[str, int]:
         """Conteo por tipo de defecto, solo sobre muestras cerradas.
-        Agregación manual con estructuras nativas."""
-        pass
-
+        Agregación manual con un diccionario {tipo: cantidad}. Un tipo que
+        no apareció no figura en el resultado. Devuelve un diccionario nuevo
+        en cada llamada."""
+        conteo: dict[str, int] = {}
+        for muestra in self._muestras.values():
+            if muestra.esta_cerrada():
+                for defecto in muestra.defectos():
+                    tipo = defecto.get_tipo()
+                    if tipo in conteo:
+                        conteo[tipo] += 1
+                    else:
+                        conteo[tipo] = 1
+        return conteo
+ 
     def muestras(self) -> list[Muestra]:
         """Copia de las muestras del lote. Devuelve una lista nueva, nunca
         el diccionario interno."""
-        pass
-
+        return list(self._muestras.values())
+ 
     # --- decisión final ---------------------------------------------
-
+ 
     def decidir(self) -> EstadoLote:
         """Validaciones, en este orden:
         1. Lote ya decidido -> TransicionIlegal (la decisión es final)
         2. Lote sin muestras -> DatosInvalidos (misma regla que
            porcentaje_no_conformes())
         3. Alguna muestra sin cerrar -> TransicionIlegal
-
+ 
         RECHAZADO si el porcentaje no conforme es estrictamente mayor que
-        5 %; con exactamente 5 % queda APROBADO."""
-        # FALTA FUNCIÓN -> TransicionIlegal (1, 3) y DatosInvalidos (2)
-        pass
-
-    def id(self) -> str:
-        pass
-
-    def cantidad_fabricada(self) -> int:
-        pass
-
-    def estado(self) -> EstadoLote:
-        pass
-
+        5 %; con exactamente 5 % queda APROBADO. Devuelve el estado final."""
+        # 1. Ya decidido
+        if self._estado is not EstadoLote.ABIERTO:
+            raise TransicionIlegal(
+                f"El lote {self._id} ya fue decidido ({self._estado.value}).")
+ 
+        # 2. Sin muestras
+        if len(self._muestras) == 0:
+            raise DatosInvalidos(
+                f"El lote {self._id} no tiene muestras: no se puede decidir.")
+ 
+        # 3. Incompleto
+        if not self.todas_cerradas():
+            raise TransicionIlegal(
+                f"El lote {self._id} tiene muestras sin cerrar: "
+                f"no se puede decidir.")
+ 
+        if self.porcentaje_no_conformes() > Lote.UMBRAL_RECHAZO_PORCENTUAL:
+            self._estado = EstadoLote.RECHAZADO
+        else:
+            self._estado = EstadoLote.APROBADO
+ 
+        return self._estado
+ 
+    # --- getters ----------------------------------------------------
+ 
+    def get_id(self) -> str:
+        return self._id
+ 
+    def get_cantidad_fabricada(self) -> int:
+        return self._cantidad_fabricada
+ 
+    def get_estado(self) -> EstadoLote:
+        return self._estado
+ 
     def __str__(self) -> str:
-        pass
+        return (f'id:{self._id} - fabricadas:{self._cantidad_fabricada} - '
+                f'muestras:{len(self._muestras)} - estado:{self._estado.value}')
 
-
+    
 # =====================================================================
 # 10. REPORTE
 # =====================================================================
-# CLASE INMUTABLE. Recibe la tupla de defectos ya congelada desde
-# muestra.defectos(); no la genera él. Como los Defecto son inmutables,
-# la copia superficial alcanza para que las causas queden estables.
+# CLASE INMUTABLE: nace completa en el __init__, no tiene setters y sus
+# atributos se leen por getters.
 #
-# El id no se inventa ni se pasa desde afuera: lo deriva Inspeccion a
-# partir de su propio id ("REP-" + id de la inspección). Como una muestra
-# admite una sola inspección aceptada, ese id es único sin necesidad de
-# un contador ni de un registro que lo asigne.
+# Recibe la tupla de defectos ya congelada desde muestra.defectos(); no la
+# genera él. Como los Defecto son inmutables, la tupla alcanza para que las
+# causas queden estables aunque alguien siga usando la muestra.
+#
+# El id sale de un contador propio ('Rep0', 'Rep1'...), como el resto de
+# las entidades.
 #
 # Una muestra conforme NO genera reporte. Una no conforme genera
-# exactamente uno.
-
-
+# exactamente uno: eso lo garantiza Inspeccion.ejecutar(), que es la única
+# que lo construye. Reporte se encarga de que lo que recibe sea coherente.
+ 
+ 
 class Reporte:
-
+ 
     contador = 0
-
+ 
     def __init__(self, muestra: Muestra, lote: Lote,
                  profesional: Profesional, fecha: date,
                  defectos: tuple[Defecto, ...]):
+        """Validaciones, en este orden y ANTES de asignar el id:
+ 
+        1. fecha es un date -> DatosInvalidos
+        2. muestra es una Muestra y profesional es un Profesional
+           -> DatosInvalidos
+        3. la muestra pertenece a 'lote' -> DatosInvalidos
+        4. la muestra está NO_CONFORME -> DatosInvalidos. Una muestra
+           conforme no genera reporte (regla 10).
+        5. defectos es una tupla con al menos un defecto -> DatosInvalidos.
+           Una muestra no conforme siempre tiene al menos uno (un crítico,
+           o una suma mayor que un límite positivo).
+        6. esos defectos son exactamente los de la muestra -> DatosInvalidos.
+           Un reporte no puede explicar el rechazo con causas ajenas.
+ 
+        Por el camino de Inspeccion.ejecutar() todas se cumplen solas,
+        porque ejecutar() pasa muestra.get_lote() y muestra.defectos()."""
+        # 1. Fecha
         Validar.fecha(fecha, "fecha del reporte")
-        # Una muestra no conforme siempre tiene al menos un defecto (un
-        # crítico, o una suma mayor que un límite positivo). Un reporte
-        # sin causas sería incoherente.
-        if not isinstance(defectos, tuple) or not defectos:
+ 
+        # 2. Tipos
+        if not isinstance(muestra, Muestra):
+            raise DatosInvalidos(
+                f"El reporte necesita una Muestra (recibido: {muestra!r}).")
+        if not isinstance(profesional, Profesional):
+            raise DatosInvalidos(
+                f"El reporte necesita un Profesional (recibido: {profesional!r}).")
+ 
+        # 3. Pertenencia
+        if muestra.get_lote() is not lote:
+            raise DatosInvalidos(
+                f"La muestra {muestra.get_id()} no pertenece al lote indicado.")
+ 
+        # 4. Solo muestras no conformes
+        if not muestra.es_no_conforme():
+            raise DatosInvalidos(
+                f"La muestra {muestra.get_id()} no es NO_CONFORME: "
+                f"no corresponde emitir reporte.")
+ 
+        # 5. Tupla no vacía
+        if not isinstance(defectos, tuple) or len(defectos) == 0:
             raise DatosInvalidos(
                 "Un reporte necesita una tupla con al menos un defecto.")
-        # FALTA FUNCIÓN -> DatosInvalidos si muestra.lote() no es 'lote'
-        # o si la muestra no es no conforme
+ 
+        # 6. Los defectos son los de la muestra (mismos objetos, mismo orden)
+        if defectos != muestra.defectos():
+            raise DatosInvalidos(
+                f"Los defectos recibidos no son los de la muestra "
+                f"{muestra.get_id()}.")
+ 
+        # Todo validado: recién ahora se consume un número del contador.
         self._id = 'Rep' + str(Reporte.contador)
-        Reporte.contador += 1        
+        Reporte.contador += 1
         self._muestra = muestra
         self._lote = lote
         self._profesional = profesional
         self._fecha = fecha
         self._defectos = defectos
-
+ 
     def causas(self) -> tuple[Defecto, ...]:
-        """La copia congelada de los defectos que determinaron el rechazo."""
-        pass
-
+        """La copia congelada de los defectos que determinaron el rechazo.
+        Se puede devolver la misma tupla: una tupla no se puede modificar,
+        y los Defecto que contiene tampoco."""
+        return self._defectos
+ 
     def resumen(self) -> str:
         """Texto legible con muestra, lote, profesional, fecha y causas.
         Acá vive la construcción del texto; __str__ delega en este método."""
-        pass
-
-    def id(self) -> str:
-        pass
-
-    def fecha(self) -> date:
-        pass
-
-    def muestra(self) -> Muestra:
-        pass
-
-    def lote(self) -> Lote:
-        pass
-
-    def profesional(self) -> Profesional:
-        pass
-
+        lineas = [
+            f"Reporte {self._id}",
+            f"  Muestra: {self._muestra.get_id()} "
+            f"({self._muestra.get_unidades()} unidades)",
+            f"  Lote: {self._lote.get_id()}",
+            f"  Profesional: {self._profesional.get_nombre()} "
+            f"({self._profesional.get_id()})",
+            f"  Fecha: {self._fecha}",
+            f"  Causas ({len(self._defectos)}):",
+        ]
+        for defecto in self._defectos:
+            lineas.append(f"    - {defecto}")
+        return "\n".join(lineas)
+ 
+    # --- getters ----------------------------------------------------
+ 
+    def get_id(self) -> str:
+        return self._id
+ 
+    def get_fecha(self) -> date:
+        return self._fecha
+ 
+    def get_muestra(self) -> Muestra:
+        return self._muestra
+ 
+    def get_lote(self) -> Lote:
+        return self._lote
+ 
+    def get_profesional(self) -> Profesional:
+        return self._profesional
+ 
     def __str__(self) -> str:
         """Delega en resumen(). No duplica la lógica del texto."""
-        pass
-
-
+        return self.resumen()
+ 
 # =====================================================================
 # 11. INSPECCION
 # =====================================================================
