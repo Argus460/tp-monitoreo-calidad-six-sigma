@@ -213,9 +213,8 @@ class Defecto:
         return self._gravedad
 
     def es_critico(self) -> bool:
-        if self._gravedad == Defecto.GRAVEDAD_MAXIMA:
-            return True
-
+        return self._gravedad == Defecto.GRAVEDAD_MAXIMA
+    
     def get_tipo(self) -> str:
         return self._tipo
 
@@ -431,35 +430,30 @@ class ProcedimientoDimensional(Procedimiento):
         self._nominal_mm = nominal_mm
         self._tolerancia_mm = tolerancia_mm
     def evaluar(self, mediciones: list[float]) -> list[dict]: 
-        try:
-            if not isinstance(mediciones, (list)):
-                raise DatosInvalidos(
-                    f"'mediciones' debe ser una lista de números "
-                    f"(recibido: {mediciones!r}).")
-            for m in mediciones:
-                if not isinstance(m, (int, float)) or isinstance(m, bool):
-                    raise DatosInvalidos(
-                        f"Cada medición debe ser un número (recibido: {m!r}).")
-            hallazgos = []
-            for m in mediciones: 
-                desvio = round(abs(m - self._nominal_mm), 6)
-                tolerancia = round(self._tolerancia_mm, 6)
-                if desvio > tolerancia: 
-                    gravedad = max(1, min(5, math.ceil(round(desvio / tolerancia, 6))))
-                    hallazgo = {
-                        "tipo": self.TIPO_DEFECTO,
-                        "descripcion": f"Medición {m} fuera de tolerancia",
-                        "gravedad": gravedad,
-                        "valor_medido_mm": m,
-                        "nominal_mm": self._nominal_mm,
-                        "tolerancia_mm": self._tolerancia_mm
-                    }
-                    hallazgos.append(hallazgo)
-            return hallazgos
-        except Exception as e:
+        if not isinstance(mediciones, (list)):
             raise DatosInvalidos(
-                f"Error al evaluar mediciones: {e}") from e
-            
+                f"'mediciones' debe ser una lista de números "
+                f"(recibido: {mediciones!r}).")
+        for m in mediciones:
+            if not isinstance(m, (int, float)) or isinstance(m, bool):
+                raise DatosInvalidos(
+                    f"Cada medición debe ser un número (recibido: {m!r}).")
+        hallazgos = []
+        for m in mediciones: 
+            desvio = round(abs(m - self._nominal_mm), 6)
+            tolerancia = round(self._tolerancia_mm, 6)
+            if desvio > tolerancia: 
+                gravedad = max(1, min(5, math.ceil(round(desvio / tolerancia, 6))))
+                hallazgo = {
+                    "tipo": self.TIPO_DEFECTO,
+                    "descripcion": f"Medición {m} fuera de tolerancia",
+                    "gravedad": gravedad,
+                    "valor_medido_mm": m,
+                    "nominal_mm": self._nominal_mm,
+                    "tolerancia_mm": self._tolerancia_mm
+                }
+                hallazgos.append(hallazgo)
+        return hallazgos
                 
 
     def get_nominal_mm(self) -> float:
@@ -1092,6 +1086,14 @@ class Inspeccion:
     PREFIJO_REPORTE = "REP-"
     contador = 0
 
+    def validar_requisitos(self) -> None:
+        if self._procedimiento._certificacion != None and (self._profesional.tiene_certificacion_vigente(self._procedimiento._certificacion, self._fecha ) == False or self._profesional.tiene_certificacion_vigente()):
+            raise CertificacionFaltante('El profesional no tiene la certificacion requerida')
+        elif self._equipo.es_apto(self._procedimiento._categoria_equipo, self._fecha) == False:
+            raise EquipoNoApto('EL equipo no es apto para realizar la inspeccion')
+        elif not self._muestra._estado:
+            raise TransicionIlegal('La puestra ya fue cerrada')
+        
     def __init__(self, muestra: Muestra, profesional: Profesional,
                  equipo: Equipo, procedimiento: Procedimiento, fecha: date):
         Validar.fecha(fecha, "fecha de inspección")
@@ -1110,16 +1112,8 @@ class Inspeccion:
 
 
 
-    def validar_requisitos(self) -> None:
-        if self._procedimiento._certificacion != None and (self._profesional.tiene_certificacion_vigente(self._procedimiento._certificacion, self._fecha ) == False or self._procedimiento._certificacion not in self._profesional._certificaciones):
-            raise CertificacionFaltante('El profesional no tiene la certificacion requerida')
-        elif self._equipo.es_apto(self._procedimiento._categoria_equipo, self._fecha) == False:
-            raise EquipoNoApto('EL equipo no es apto para realizar la inspeccion')
-        elif not self._muestra._estado:
-            raise TransicionIlegal('La puestra ya fue cerrada')
-        else:
-            print('Requiitos validados')
-        
+
+                
         """Chequea, en orden, las tres condiciones previas. Lanza la excepción
         que corresponda ANTES de tocar la muestra, para que un rechazo no deje
         efectos secundarios:
@@ -1133,7 +1127,6 @@ class Inspeccion:
         mal a la vez, la excepción que sale es la primera de la lista. Cada
         test debería romper un solo requisito por vez.
         """
-        pass
 
     def ejecutar(self, observaciones) -> Reporte | None:
         
@@ -1159,7 +1152,7 @@ class Inspeccion:
             self._reporte = Reporte(self._muestra, self._muestra.get_lote(), self._profesional, self._fecha, self._muestra.defectos())
             return self._reporte
         else:
-            return None
+            return self._reporte
 
         """Secuencia completa:
 
@@ -1199,7 +1192,6 @@ class Inspeccion:
         segunda inspección sobre la misma muestra, validar_requisitos()
         la rechaza en el paso 3, porque la muestra ya no está PENDIENTE.
         """
-        pass
 
     def get_reporte(self) -> Reporte | None:
         if self._reporte == None:
