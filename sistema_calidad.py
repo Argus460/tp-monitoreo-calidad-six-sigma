@@ -1096,7 +1096,7 @@ class Inspeccion:
                  equipo: Equipo, procedimiento: Procedimiento, fecha: date):
         Validar.fecha(fecha, "fecha de inspección")
         Inspeccion.contador += 1     
-        if muestra.lote() == None:
+        if muestra.get_lote() == None:
             raise DatosInvalidos('La muestra no tiene un lote asignado')
         else:
             self._muestra = muestra        
@@ -1111,11 +1111,11 @@ class Inspeccion:
 
 
     def validar_requisitos(self) -> None:
-        if self._procedimiento._certificacion != None and (self._profesional.tiene_certificacion_vigente(self._procedimiento._certificacion) == False or self._procedimiento._certificacion not in self._profesional._certificaciones):
+        if self._procedimiento._certificacion != None and (self._profesional.tiene_certificacion_vigente(self._procedimiento._certificacion, self._fecha ) == False or self._procedimiento._certificacion not in self._profesional._certificaciones):
             raise CertificacionFaltante('El profesional no tiene la certificacion requerida')
         elif self._equipo.es_apto(self._procedimiento._categoria_equipo, self._fecha) == False:
             raise EquipoNoApto('EL equipo no es apto para realizar la inspeccion')
-        elif self._muestra._estado != 'PENDIENTE':
+        elif not self._muestra._estado:
             raise TransicionIlegal('La puestra ya fue cerrada')
         else:
             print('Requiitos validados')
@@ -1148,15 +1148,15 @@ class Inspeccion:
             hallazgos = self._procedimiento.evaluar(observaciones)
             for hallazgo in hallazgos:
                 self._muestra.registrar_defecto(**hallazgo)
-            self._muestra.cerrar(self._procedimiento.limite_gravedad())
+            self._muestra.cerrar(self._procedimiento.get_limite_gravedad())
         except Exception:
             self._muestra.revertir_a_pendiente()
             raise
 
         self._ejecutada = True
         
-        if self._muestra.estado == 'NO_CONFORME':
-            self._reporte = Reporte(self._muestra, self._muestra._lote, self._profesional, self._fecha, hallazgos)
+        if self._muestra.es_no_conforme:
+            self._reporte = Reporte(self._muestra, self._muestra.get_lote(), self._profesional, self._fecha, self._muestra.defectos())
             return self._reporte
         else:
             return None
