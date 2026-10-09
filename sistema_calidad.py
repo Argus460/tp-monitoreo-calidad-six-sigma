@@ -1221,8 +1221,8 @@ class Inspeccion:
 # =====================================================================
 # 12. REGISTRO
 # =====================================================================
-# Garantiza que los identificadores sean únicos dentro de cada categoría.
-# Es la única puerta de entrada para dar de alta entidades.
+# Garantiza que los identificadores sean únicos dentro de cada categoría
+# (regla 1). Es la única puerta de entrada para dar de alta entidades.
 #
 # Con ids autoincrementales, dos objetos distintos ya nacen con ids
 # distintos. El Registro sigue siendo la barrera para lo que el contador
@@ -1232,10 +1232,18 @@ class Inspeccion:
 # Todas las categorías, incluidas inspecciones y reportes, son
 # diccionarios indexados por id: la unicidad se chequea con 'in' en vez
 # de recorrer una lista, y obtener por id es directo.
-
-
+#
+# Las seis altas hacen lo mismo cambiando solo el diccionario y la clase
+# esperada, así que la lógica está escrita una sola vez en _alta(). Lo
+# mismo pasa con las consultas por id y _buscar(). Los métodos públicos
+# quedan de una línea y dicen qué categoría tocan.
+#
+# El Registro NO crea objetos ni ejecuta inspecciones: solo guarda lo
+# que ya fue creado y lo devuelve cuando se lo piden.
+ 
+ 
 class Registro:
-
+ 
     def __init__(self):
         self._lotes: dict[str, Lote] = {}
         self._profesionales: dict[str, Profesional] = {}
@@ -1243,52 +1251,96 @@ class Registro:
         self._procedimientos: dict[str, Procedimiento] = {}
         self._inspecciones: dict[str, Inspeccion] = {}
         self._reportes: dict[str, Reporte] = {}
-
+ 
+    # --- lógica compartida ------------------------------------------
+ 
+    def _alta(self, categoria: dict, objeto, clase, nombre: str) -> None:
+        """Da de alta 'objeto' en el diccionario 'categoria'.
+ 
+        Valida dos condiciones ANTES de tocar el diccionario:
+        1. que el objeto sea de la clase esperada -> DatosInvalidos.
+           Sin esto, un Profesional podría terminar guardado entre los
+           lotes. Se usa isinstance, así que cualquier subclase de
+           Procedimiento (dimensional, visual) entra como procedimiento.
+        2. que su id no exista ya en esa categoría -> DatosInvalidos
+           (regla 1).
+ 
+        Como se valida primero, un alta rechazada no reemplaza ni
+        modifica lo que ya estaba registrado. 'nombre' solo se usa para
+        armar el mensaje de error."""
+        # 1. Tipo
+        if not isinstance(objeto, clase):
+            raise DatosInvalidos(
+                f"Solo se puede registrar un {nombre} en esta categoría "
+                f"(recibido: {objeto!r}).")
+ 
+        # 2. Id no repetido
+        id = objeto.get_id()
+        if id in categoria:
+            raise DatosInvalidos(
+                f"Ya hay un {nombre} registrado con id {id}.")
+ 
+        # Todo validado: recién ahora se modifica el diccionario.
+        categoria[id] = objeto
+ 
+    def _buscar(self, categoria: dict, id: str, nombre: str):
+        """Devuelve el objeto guardado con ese id en 'categoria'.
+        Si el id no existe -> DatosInvalidos. No modifica nada."""
+        if id not in categoria:
+            raise DatosInvalidos(
+                f"No hay ningún {nombre} registrado con id {id}.")
+        return categoria[id]
+ 
     # --- altas ------------------------------------------------------
-    # FALTA FUNCIÓN (todas las altas) -> DatosInvalidos si el id ya existe
-    # en su categoría.
-
+    # Todas lanzan DatosInvalidos si el objeto no es de la clase que
+    # corresponde o si su id ya existe en su categoría.
+ 
     def registrar_lote(self, lote: Lote) -> None:
-        pass
-
+        self._alta(self._lotes, lote, Lote, "lote")
+ 
     def registrar_profesional(self, profesional: Profesional) -> None:
-        pass
-
+        self._alta(self._profesionales, profesional, Profesional,
+                   "profesional")
+ 
     def registrar_equipo(self, equipo: Equipo) -> None:
-        pass
-
+        self._alta(self._equipos, equipo, Equipo, "equipo")
+ 
     def registrar_procedimiento(self, procedimiento: Procedimiento) -> None:
-        pass
-
+        self._alta(self._procedimientos, procedimiento, Procedimiento,
+                   "procedimiento")
+ 
     def registrar_inspeccion(self, inspeccion: Inspeccion) -> None:
-        pass
-
+        self._alta(self._inspecciones, inspeccion, Inspeccion, "inspección")
+ 
     def registrar_reporte(self, reporte: Reporte) -> None:
-        """Como el id del reporte deriva del id de la inspección, un
-        duplicado acá delata que se emitieron dos reportes para la misma
-        inspección."""
-        pass
-
+        """El id del reporte sale de su propio contador ('Rep0', 'Rep1'...).
+        Un duplicado acá significa que se intentó registrar dos veces el
+        mismo reporte."""
+        self._alta(self._reportes, reporte, Reporte, "reporte")
+ 
     # --- consultas --------------------------------------------------
-    # FALTA FUNCIÓN (todos los obtener_*) -> DatosInvalidos si el id no existe.
-
-
+    # Todos los obtener_* lanzan DatosInvalidos si el id no existe en su
+    # categoría. Las categorías son independientes: un id de lote no se
+    # encuentra buscando entre los profesionales.
+ 
     def obtener_lote(self, id: str) -> Lote:
-        pass
-
+        return self._buscar(self._lotes, id, "lote")
+ 
     def obtener_profesional(self, id: str) -> Profesional:
-        pass
-
+        return self._buscar(self._profesionales, id, "profesional")
+ 
     def obtener_equipo(self, id: str) -> Equipo:
-        pass
-
+        return self._buscar(self._equipos, id, "equipo")
+ 
     def obtener_procedimiento(self, id: str) -> Procedimiento:
-        pass
-
+        return self._buscar(self._procedimientos, id, "procedimiento")
+ 
     def inspecciones(self) -> list[Inspeccion]:
-        """Copia de la lista de inspecciones registradas."""
-        pass
-
+        """Copia de las inspecciones registradas, en orden de alta.
+        Devuelve una lista nueva, nunca el diccionario interno."""
+        return list(self._inspecciones.values())
+ 
     def reportes(self) -> list[Reporte]:
-        """Copia de la lista de reportes emitidos."""
-        pass
+        """Copia de los reportes registrados, en orden de alta.
+        Devuelve una lista nueva, nunca el diccionario interno."""
+        return list(self._reportes.values())
