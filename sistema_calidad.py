@@ -1075,68 +1075,161 @@ class Reporte:
 # procedimiento), por eso es la que valida en conjunto antes de tocar nada.
 #
 # Recibe todo en el constructor y no permite cambiar sus requisitos durante
-# la ejecución. No se reutiliza para otra muestra.
+# la ejecución: no tiene setters, solo getters. No se reutiliza para otra
+# muestra.
 #
 # La fecha entra por parámetro y nunca se toma de date.today(): es lo que
 # hace reproducibles los tests de los bordes de calibración y certificación.
-
-
+#
+# Solo usa métodos públicos de las otras clases (getters y consultas como
+# esta_pendiente()), nunca sus atributos privados.
+ 
+ 
 class Inspeccion:
-
-    PREFIJO_REPORTE = "REP-"
+ 
     contador = 0
-
-    def validar_requisitos(self) -> None:
-        if self._procedimiento._certificacion != None and (self._profesional.tiene_certificacion_vigente(self._procedimiento._certificacion, self._fecha ) == False or self._profesional.tiene_certificacion_vigente()):
-            raise CertificacionFaltante('El profesional no tiene la certificacion requerida')
-        elif self._equipo.es_apto(self._procedimiento._categoria_equipo, self._fecha) == False:
-            raise EquipoNoApto('EL equipo no es apto para realizar la inspeccion')
-        elif not self._muestra._estado:
-            raise TransicionIlegal('La puestra ya fue cerrada')
-        
+ 
     def __init__(self, muestra: Muestra, profesional: Profesional,
                  equipo: Equipo, procedimiento: Procedimiento, fecha: date):
+        """Validaciones, en este orden y ANTES de asignar el id:
+ 
+        1. fecha es un date -> DatosInvalidos
+        2. muestra, profesional, equipo y procedimiento son de la clase
+           que corresponde -> DatosInvalidos
+        3. la muestra ya pertenece a un lote -> DatosInvalidos
+ 
+        Recién si todo pasa se consume un número del contador. Así una
+        inspección rechazada no gasta un id, y la primera es 'Insp0',
+        igual que el resto de las entidades.
+ 
+        El estado de la muestra NO se valida acá sino en
+        validar_requisitos(), al momento de ejecutar: es entonces cuando
+        importa que siga PENDIENTE."""
+        # 1. Fecha
         Validar.fecha(fecha, "fecha de inspección")
-        Inspeccion.contador += 1     
-        if muestra.get_lote() == None:
-            raise DatosInvalidos('La muestra no tiene un lote asignado')
-        else:
-            self._muestra = muestra        
+ 
+        # 2. Tipos
+        if not isinstance(muestra, Muestra):
+            raise DatosInvalidos(
+                f"La inspección necesita una Muestra (recibido: {muestra!r}).")
+        if not isinstance(profesional, Profesional):
+            raise DatosInvalidos(
+                f"La inspección necesita un Profesional "
+                f"(recibido: {profesional!r}).")
+        if not isinstance(equipo, Equipo):
+            raise DatosInvalidos(
+                f"La inspección necesita un Equipo (recibido: {equipo!r}).")
+        if not isinstance(procedimiento, Procedimiento):
+            raise DatosInvalidos(
+                f"La inspección necesita un Procedimiento "
+                f"(recibido: {procedimiento!r}).")
+ 
+        # 3. Muestra con lote
+        if muestra.get_lote() is None:
+            raise DatosInvalidos(
+                f"La muestra {muestra.get_id()} no tiene un lote asignado.")
+ 
+        # Todo validado: recién ahora se consume un número del contador.
         self._id = 'Insp' + str(Inspeccion.contador)
+        Inspeccion.contador += 1
+        self._muestra = muestra
         self._profesional = profesional
         self._equipo = equipo
         self._procedimiento = procedimiento
         self._fecha = fecha
         self._ejecutada = False
         self._reporte: Reporte | None = None
-
-
-
-
-                
+ 
+    def validar_requisitos(self) -> None:
         """Chequea, en orden, las tres condiciones previas. Lanza la excepción
         que corresponda ANTES de tocar la muestra, para que un rechazo no deje
-        efectos secundarios:
-
+        efectos secundarios (regla 5: "una inspección rechazada no modifica
+        la muestra"):
+ 
         1. Si el procedimiento exige certificación y el profesional no la
            tiene vigente a la fecha -> CertificacionFaltante
         2. Si el equipo no es apto (categoría o calibración) -> EquipoNoApto
         3. Si la muestra no está PENDIENTE -> TransicionIlegal
-
+ 
         El orden importa para los tests: si un escenario tiene dos requisitos
         mal a la vez, la excepción que sale es la primera de la lista. Cada
-        test debería romper un solo requisito por vez.
-        """
-
+        test debería romper un solo requisito por vez."""
+        # 1. Certificación
+        certificacion = self._procedimiento.get_certificacion_requerida()
+        if certificacion is not None:
+            if not self._profesional.tiene_certificacion_vigente(
+                    certificacion, self._fecha):
+                raise CertificacionFaltante(
+                    f"El profesional {self._profesional.get_id()} no tiene "
+                    f"vigente la certificación '{certificacion}' "
+                    f"al {self._fecha}.")
+ 
+        # 2. Equipo
+        categoria = self._procedimiento.get_categoria_equipo()
+        if not self._equipo.es_apto(categoria, self._fecha):
+            raise EquipoNoApto(
+                f"El equipo {self._equipo.get_id()} no es apto: se requiere "
+                f"categoría '{categoria}' con calibración vigente "
+                f"al {self._fecha}.")
+ 
+        # 3. Muestra pendiente
+        if not self._muestra.esta_pendiente():
+            raise TransicionIlegal(
+                f"La muestra {self._muestra.get_id()} no está PENDIENTE "
+                f"(estado: {self._muestra.get_estado().value}).")
+ 
     def ejecutar(self, observaciones) -> Reporte | None:
-        
-        if self._ejecutada == True:
-            raise TransicionIlegal('La inspeccion ya fue ejecutada')
-        else:
-            self.validar_requisitos()
-
-        self._muestra.marcar_en_inspeccion(self._procedimiento.campos_observacion())
-
+        """Secuencia completa:
+ 
+        1. Si esta inspección ya se ejecutó -> TransicionIlegal
+        2. validar_requisitos()
+        3. muestra.marcar_en_inspeccion(procedimiento.campos_observacion())
+        4. Dentro de un try:
+                hallazgos = procedimiento.evaluar(observaciones)
+                for hallazgo in hallazgos:
+                    muestra.registrar_defecto(**hallazgo)
+                muestra.cerrar(procedimiento.get_limite_gravedad())
+           Si algo de eso falla, se llama a muestra.revertir_a_pendiente()
+           y se relanza la excepción original sin envolverla.
+        5. Marca _ejecutada = True. Solo se marca si todo salió bien: una
+           ejecución que falló y se revirtió puede reintentarse con la
+           misma inspección y observaciones corregidas.
+        6. Si quedó no conforme -> construye el Reporte y lo devuelve.
+           El id del reporte sale del contador propio de Reporte.
+           Si quedó conforme -> devuelve None.
+ 
+        POR QUÉ EL REPORTE VA FUERA DEL try: cuando se construye, la
+        muestra ya está cerrada y no se puede revertir. Entonces el Reporte
+        no puede fallar, porque una muestra no conforme sin reporte rompe
+        la regla 10. Por eso todo lo que Reporte valida está garantizado
+        antes: la fecha, los tipos y el lote de la muestra los chequea el
+        __init__ de Inspeccion, y una muestra no conforme siempre tiene
+        defectos.
+ 
+        POR QUÉ EL ROLLBACK: evaluar() puede fallar con observaciones mal
+        formadas, y para entonces la muestra ya está EN_INSPECCION. Sin
+        rollback quedaría trabada ahí para siempre: no vuelve a ser
+        PENDIENTE, así que no admite otra inspección, y no está cerrada,
+        así que el lote entero nunca podría decidirse. El rollback lo
+        dispara únicamente la inspección que falló, y solo puede devolver
+        la muestra al estado previo: no habilita reabrir una muestra cerrada.
+ 
+        Una muestra admite una única inspección aceptada. Si se intenta una
+        segunda inspección sobre la misma muestra, validar_requisitos()
+        la rechaza en el paso 3, porque la muestra ya no está PENDIENTE."""
+        # 1. Una sola ejecución aceptada por inspección
+        if self._ejecutada:
+            raise TransicionIlegal(
+                f"La inspección {self._id} ya fue ejecutada.")
+ 
+        # 2. Requisitos, antes de tocar la muestra
+        self.validar_requisitos()
+ 
+        # 3. Inicio
+        self._muestra.marcar_en_inspeccion(
+            self._procedimiento.campos_observacion())
+ 
+        # 4. Evaluación, registro de defectos y cierre, con rollback
         try:
             hallazgos = self._procedimiento.evaluar(observaciones)
             for hallazgo in hallazgos:
@@ -1145,79 +1238,44 @@ class Inspeccion:
         except Exception:
             self._muestra.revertir_a_pendiente()
             raise
-
+ 
+        # 5. Recién ahora la ejecución cuenta como aceptada
         self._ejecutada = True
-        
-        if self._muestra.es_no_conforme:
-            self._reporte = Reporte(self._muestra, self._muestra.get_lote(), self._profesional, self._fecha, self._muestra.defectos())
-            return self._reporte
-        else:
-            return self._reporte
-
-        """Secuencia completa:
-
-        1. Si esta inspección ya se ejecutó -> TransicionIlegal
-        2. validar_requisitos()
-        3. muestra.marcar_en_inspeccion(procedimiento.campos_observacion())
-        4. Dentro de un try:
-                hallazgos = procedimiento.evaluar(observaciones)
-                for hallazgo in hallazgos:
-                    muestra.registrar_defecto(**hallazgo)
-                muestra.cerrar(procedimiento.limite_gravedad())
-           Si algo de eso falla, se llama a muestra.revertir_a_pendiente()
-           y se relanza la excepción original sin envolverla.
-        5. Marca _ejecutada = True. Solo se marca si todo salió bien: una
-           ejecución que falló y se revirtió puede reintentarse con la
-           misma inspección y observaciones corregidas.
-        6. Si quedó no conforme -> construye el Reporte con id
-           PREFIJO_REPORTE + self._id y lo devuelve.
-           Si quedó conforme -> devuelve None.
-
-        POR QUÉ EL REPORTE VA FUERA DEL try: cuando se construye, la
-        muestra ya está cerrada y no se puede revertir. Entonces el Reporte
-        no puede fallar, porque una muestra no conforme sin reporte rompe
-        la regla 10. Por eso todo lo que Reporte valida está garantizado
-        antes: la fecha y el lote de la muestra los chequea el __init__ de
-        Inspeccion, y una muestra no conforme siempre tiene defectos.   
-        
-        POR QUÉ EL ROLLBACK: evaluar() puede fallar con observaciones mal
-        formadas, y para entonces la muestra ya está EN_INSPECCION. Sin
-        rollback quedaría trabada ahí para siempre: no vuelve a ser
-        PENDIENTE, así que no admite otra inspección, y no está cerrada,
-        así que el lote entero nunca podría decidirse. El rollback lo
-        dispara únicamente la inspección que falló, y solo puede devolver
-        la muestra al estado previo: no habilita reabrir una muestra cerrada.
-
-        Una muestra admite una única inspección aceptada. Si se intenta una
-        segunda inspección sobre la misma muestra, validar_requisitos()
-        la rechaza en el paso 3, porque la muestra ya no está PENDIENTE.
-        """
-
+ 
+        # 6. Reporte solo para muestras no conformes
+        if self._muestra.es_no_conforme():
+            self._reporte = Reporte(self._muestra, self._muestra.get_lote(),
+                                    self._profesional, self._fecha,
+                                    self._muestra.defectos())
+        return self._reporte
+ 
+    # --- getters ----------------------------------------------------
+ 
+    def fue_ejecutada(self) -> bool:
+        return self._ejecutada
+ 
     def get_reporte(self) -> Reporte | None:
-        if self._reporte == None:
-            return None
-        else:
-            return self._reporte
-
+        """None si todavía no se ejecutó o si la muestra quedó conforme."""
+        return self._reporte
+ 
     def get_id(self) -> str:
         return self._id
-
+ 
     def get_fecha(self) -> date:
         return self._fecha
-
+ 
     def get_muestra(self) -> Muestra:
         return self._muestra
-
+ 
     def get_profesional(self) -> Profesional:
         return self._profesional
-
+ 
     def get_equipo(self) -> Equipo:
         return self._equipo
-
-    def procedimiento(self) -> Procedimiento:
+ 
+    def get_procedimiento(self) -> Procedimiento:
         return self._procedimiento
-
-
+    
 # =====================================================================
 # 12. REGISTRO
 # =====================================================================
