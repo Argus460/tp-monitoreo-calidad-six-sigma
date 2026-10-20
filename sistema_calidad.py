@@ -37,6 +37,10 @@ from enum import Enum
 
 import math
 
+import pickle
+import re
+from pathlib import Path
+
 # =====================================================================
 # 1. EXCEPCIONES
 # =====================================================================
@@ -1301,6 +1305,9 @@ class Inspeccion:
  
  
 class Registro:
+
+    ARCHIVO_POR_DEFECTO = "registro.pkl"
+
  
     def __init__(self):
         self._lotes: dict[str, Lote] = {}
@@ -1402,3 +1409,54 @@ class Registro:
         """Copia de los reportes registrados, en orden de alta.
         Devuelve una lista nueva, nunca el diccionario interno."""
         return list(self._reportes.values())
+
+    def guardar(self, nombre_archivo):
+        """
+        Guarda el registro y los contadores actuales.
+        """
+
+        datos = {
+            "registro": self,
+
+            # Guardamos también los contadores para que,
+            # cuando vuelva a abrirse el programa,
+            # los IDs continúen desde donde quedaron.
+            "contador_lote": Lote.contador,
+            "contador_profesional": Profesional.contador,
+            "contador_equipo": Equipo.contador,
+            "contador_procedimiento": Procedimiento.contador,
+            "contador_inspeccion": Inspeccion.contador,
+            "contador_reporte": Reporte.contador
+        }
+
+        archivo = open(nombre_archivo, "wb")
+
+        # pickle.dump guarda los datos en el archivo
+        pickle.dump(datos, archivo)
+
+        archivo.close()
+
+
+    @classmethod
+    def cargar(cls, nombre_archivo):
+        """
+        Carga el registro y recupera los contadores.
+        """
+        archivo = open(nombre_archivo, "rb")
+
+        #pickle.load recupera los datos guardados
+        datos = pickle.load(archivo)
+
+        archivo.close()
+
+        registro = datos["registro"]
+
+        # Restauramos los atributos de clase.
+        Lote.contador = datos["contador_lote"]
+        Profesional.contador = datos["contador_profesional"]
+        Equipo.contador = datos["contador_equipo"]
+        Procedimiento.contador = datos["contador_procedimiento"]
+        Inspeccion.contador = datos["contador_inspeccion"]
+        Reporte.contador = datos["contador_reporte"]
+
+        return registro
