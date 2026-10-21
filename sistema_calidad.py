@@ -296,6 +296,11 @@ class Profesional:
     def get_nombre(self) -> str:
         return self._nombre
 
+    @classmethod
+    def actualizar_contador(cls, id):
+        numero = int(id.replace("Prof", ""))
+        if numero >= cls.contador:
+            cls.contador = numero + 1
 
 # =====================================================================
 # 6. EQUIPO
@@ -339,6 +344,11 @@ class Equipo:
     def get_fecha_calibracion(self) -> date:
         return self._fecha_calibracion
 
+    @classmethod
+    def actualizar_contador(cls, id):
+        numero = int(id.replace("Equip", ""))
+        if numero >= cls.contador:
+            cls.contador = numero + 1
 
 
 # =====================================================================
@@ -415,6 +425,12 @@ class Procedimiento(ABC):
     def get_id(self) -> str:
         return self._id
     
+    @classmethod
+    def actualizar_contador(cls, id):
+        numero = int(id.replace("Proced", ""))
+
+        if numero >= cls.contador:
+            cls.contador = numero + 1
 
 
 class ProcedimientoDimensional(Procedimiento):
@@ -742,6 +758,11 @@ class Muestra:
     def __str__(self) -> str:
         return f'id:{self._id} - unidades:{self._unidades} - estado:{self._estado.value} - defectos:{len(self._defectos)}'
 
+    @classmethod
+    def actualizar_contador(cls, id):
+        numero = int(id.replace("Mue", ""))
+        if numero >= cls.contador:
+            cls.contador = numero + 1
 
 # =====================================================================
 # 9. LOTE
@@ -943,7 +964,13 @@ class Lote:
         return (f'id:{self._id} - fabricadas:{self._cantidad_fabricada} - '
                 f'muestras:{len(self._muestras)} - estado:{self._estado.value}')
 
-    
+    @classmethod
+    def actualizar_contador(cls, id):
+        numero = int(id.replace("Lot", ""))
+
+        if numero >= cls.contador:
+            cls.contador = numero + 1
+        
 # =====================================================================
 # 10. REPORTE
 # =====================================================================
@@ -1070,6 +1097,13 @@ class Reporte:
     def __str__(self) -> str:
         """Delega en resumen(). No duplica la lógica del texto."""
         return self.resumen()
+
+    @classmethod
+    def actualizar_contador(cls, id):
+        numero = int(id.replace("Rep", ""))
+
+        if numero >= cls.contador:
+            cls.contador = numero + 1
  
 # =====================================================================
 # 11. INSPECCION
@@ -1280,6 +1314,13 @@ class Inspeccion:
     def get_procedimiento(self) -> Procedimiento:
         return self._procedimiento
     
+    @classmethod
+    def actualizar_contador(cls, id):
+        numero = int(id.replace("Insp", ""))
+
+        if numero >= cls.contador:
+            cls.contador = numero + 1
+
 # =====================================================================
 # 12. REGISTRO
 # =====================================================================
@@ -1411,52 +1452,111 @@ class Registro:
         return list(self._reportes.values())
 
     def guardar(self, nombre_archivo):
-        """
-        Guarda el registro y los contadores actuales.
-        """
-
-        datos = {
-            "registro": self,
-
-            # Guardamos también los contadores para que,
-            # cuando vuelva a abrirse el programa,
-            # los IDs continúen desde donde quedaron.
-            "contador_lote": Lote.contador,
-            "contador_profesional": Profesional.contador,
-            "contador_equipo": Equipo.contador,
-            "contador_procedimiento": Procedimiento.contador,
-            "contador_inspeccion": Inspeccion.contador,
-            "contador_reporte": Reporte.contador
-        }
-
         archivo = open(nombre_archivo, "wb")
-
-        # pickle.dump guarda los datos en el archivo
-        pickle.dump(datos, archivo)
-
+        pickle.dump(self, archivo)
         archivo.close()
-
 
     @classmethod
     def cargar(cls, nombre_archivo):
-        """
-        Carga el registro y recupera los contadores.
-        """
         archivo = open(nombre_archivo, "rb")
-
-        #pickle.load recupera los datos guardados
-        datos = pickle.load(archivo)
-
+        registro = pickle.load(archivo)
         archivo.close()
 
-        registro = datos["registro"]
+    # ========================================================
 
-        # Restauramos los atributos de clase.
-        Lote.contador = datos["contador_lote"]
-        Profesional.contador = datos["contador_profesional"]
-        Equipo.contador = datos["contador_equipo"]
-        Procedimiento.contador = datos["contador_procedimiento"]
-        Inspeccion.contador = datos["contador_inspeccion"]
-        Reporte.contador = datos["contador_reporte"]
+    # ACTUALIZAR CONTADOR DE LOTES
+
+    # ========================================================
+
+        for lote in registro._lotes.values():
+            Lote.actualizar_contador(lote.get_id())
+
+        # ----------------------------------------------------
+
+        # Las muestras están DENTRO de los lotes.
+
+        #
+
+        # No existe registro._muestras, así que tenemos que
+
+        # buscarlas recorriendo los lotes.
+
+        # ----------------------------------------------------
+
+        for muestra in lote.muestras():
+
+            Muestra.actualizar_contador(
+
+                muestra.get_id()
+
+            )
+
+    # ========================================================
+
+    # ACTUALIZAR CONTADOR DE PROFESIONALES
+
+    # ========================================================
+
+        for profesional in registro._profesionales.values():
+
+                Profesional.actualizar_contador(
+
+                    profesional.get_id()
+
+                )
+
+    # ========================================================
+
+    # ACTUALIZAR CONTADOR DE EQUIPOS
+
+    # ========================================================
+
+        for equipo in registro._equipos.values():
+
+            Equipo.actualizar_contador(
+
+                equipo.get_id()
+
+            )
+
+    # ========================================================
+
+    # ACTUALIZAR CONTADOR DE PROCEDIMIENTOS
+
+    # ========================================================
+
+        for procedimiento in registro._procedimientos.values():
+
+            Procedimiento.actualizar_contador(
+
+                procedimiento.get_id()
+
+            )
+
+    # ========================================================
+
+    # ACTUALIZAR CONTADOR DE INSPECCIONES
+
+    # ========================================================
+
+        for inspeccion in registro._inspecciones.values():
+
+            Inspeccion.actualizar_contador(
+
+                inspeccion.get_id()
+
+            )
+
+    # ========================================================
+
+    # ACTUALIZAR CONTADOR DE REPORTES
+
+    # ========================================================
+
+        for reporte in registro._reportes.values():
+
+            Reporte.actualizar_contador(
+
+                reporte.get_id())
 
         return registro
