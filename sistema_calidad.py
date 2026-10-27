@@ -1560,3 +1560,89 @@ class Registro:
                 reporte.get_id())
 
         return registro
+
+# RECURSIVIDAD: cantidad() y a_lista() recorren la cadena de nodos de
+# forma recursiva. Una cadena de nodos es recursiva por naturaleza: un
+# nodo es un dato más "el resto de la cadena", que a su vez empieza en
+# otro nodo. Cada consulta tiene un método público, que arranca desde
+# _inicio, y uno privado que recibe el nodo actual y se llama a sí mismo
+# con el siguiente. Las dos solo leen: no modifican la cola.
+
+class Nodo:
+    """Un eslabón de la cadena: un dato y la referencia al nodo siguiente.
+    Es un detalle interno de la Cola; nadie de afuera lo usa."""
+
+    def __init__(self, dato):
+        self.dato = dato
+        self.siguiente = None
+
+
+class Cola:
+    """FIFO: el primero que entra es el primero que sale."""
+
+    def __init__(self):
+        self._inicio = None
+        self._final = None
+
+    def esta_vacia(self) -> bool:
+        """True si no hay ningún nodo: el inicio apunta a None."""
+        return self._inicio is None
+
+    def encolar(self, dato) -> None:
+        """Agrega 'dato' al final de la cola:
+        1. Crea un nodo nuevo con el dato.
+        2. Si la cola estaba vacía, el nodo nuevo también es el inicio; si
+           no, el último nodo actual pasa a apuntar al nuevo.
+        3. El final pasa a ser el nodo nuevo."""
+        nuevo = Nodo(dato)
+        if self.esta_vacia():
+            self._inicio = nuevo
+        else:
+            self._final.siguiente = nuevo
+        self._final = nuevo
+
+    def desencolar(self):
+        """Saca y devuelve el dato del inicio:
+        1. Copia el dato del nodo del inicio.
+        2. Mueve el inicio al nodo siguiente.
+        3. Si la cola quedó vacía, el final también pasa a None.
+        Sobre una cola vacía lanza DatosInvalidos."""
+        if self.esta_vacia():
+            raise DatosInvalidos("No se puede desencolar: la cola está vacía.")
+        dato = self._inicio.dato
+        self._inicio = self._inicio.siguiente
+        if self._inicio is None:
+            self._final = None
+        return dato
+
+    def frente(self):
+        """Devuelve el dato del inicio sin sacarlo de la cola.
+        Sobre una cola vacía lanza DatosInvalidos."""
+        if self.esta_vacia():
+            raise DatosInvalidos("La cola está vacía: no hay frente.")
+        return self._inicio.dato
+
+    # --- consultas recursivas ---------------------------------------
+
+    def cantidad(self) -> int:
+        """Cuántos elementos hay. Recursiva: arranca desde el inicio."""
+        return self._contar_desde(self._inicio)
+
+    def _contar_desde(self, nodo) -> int:
+        """Caso base: si no hay nodo, no hay nada que contar (0).
+        Caso recursivo: este nodo (1) más los que vienen después."""
+        if nodo is None:
+            return 0
+        return 1 + self._contar_desde(nodo.siguiente)
+
+    def a_lista(self) -> list:
+        """Los datos en orden, del inicio al final, en una lista nueva.
+        No desencola nada. Recursiva: arranca desde el inicio."""
+        return self._a_lista_desde(self._inicio)
+
+    def _a_lista_desde(self, nodo) -> list:
+        """Caso base: si no hay nodo, lista vacía.
+        Caso recursivo: el dato de este nodo seguido de los del resto."""
+        if nodo is None:
+            return []
+        return [nodo.dato] + self._a_lista_desde(nodo.siguiente)
