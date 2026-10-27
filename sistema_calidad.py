@@ -197,16 +197,16 @@ class Defecto:
     GRAVEDAD_MINIMA = 1
     GRAVEDAD_MAXIMA = 5
     GRAVEDAD_CRITICA = 5
+    TIPOS_VALIDOS = {"dimensional", "visual"}
 
     def __init__(self, tipo: str, descripcion: str, gravedad: int, **datos_observacion):
         Validar.texto_no_vacio(tipo, "tipo")
         Validar.texto_no_vacio(descripcion, "descripcion")
         Validar.entero_en_rango(gravedad, Defecto.GRAVEDAD_MINIMA,
                                 Defecto.GRAVEDAD_MAXIMA, "gravedad")        
-        if tipo == 'dimensional' or tipo == 'visual':
-            self._tipo = tipo
-        else:
-            raise DatosInvalidos('el tipo debe ser dimensional o visual')        
+        if tipo not in Defecto.TIPOS_VALIDOS:
+            raise DatosInvalidos('el tipo debe ser dimensional o visual')
+        self._tipo = tipo        
         self._descripcion = descripcion
         self._gravedad = gravedad
         # dict() crea una copia: nadie de afuera conserva una referencia
