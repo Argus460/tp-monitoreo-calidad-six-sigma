@@ -1646,3 +1646,148 @@ class Cola:
         if nodo is None:
             return []
         return [nodo.dato] + self._a_lista_desde(nodo.siguiente)
+
+# =====================================================================
+# 14. AGENDA
+# =====================================================================
+# Ordena el trabajo del laboratorio: las inspecciones se PROGRAMAN con
+# sus observaciones y se PROCESAN en orden de llegada, la más antigua
+# primero. Por eso guarda una Cola (FIFO) de pares(inspeccion, observaciones).
+#
+# Es una clase aparte, y no métodos del Registro, porque el Registro
+# solo guarda lo que ya existe y no ejecuta inspecciones. La Agenda
+# ejecuta, y le entrega al Registro lo que salió bien.
+#
+# SI UNA INSPECCIÓN FALLA (certificación, equipo, observaciones mal
+# formadas...) igual sale de la cola. No se reencola, porque si el
+# problema es permanente giraría para siempre; y no queda al frente,
+# porque bloquearía a todas las que esperan detrás. Gracias al rollback
+# de Inspeccion.ejecutar(), su muestra queda PENDIENTE y se puede volver
+# a programar una vez corregido el problema.
+#
+# CONJUNTO: _programadas guarda los ids de las inspecciones que están en
+# la cola. Así "¿esta inspección ya está programada?" se responde con
+# 'in', sin recorrer la cola nodo por nodo.
+#
+# Las inspecciones que pasan por la Agenda las registra la Agenda: no
+# hay que registrarlas a mano antes.
+#
+# Igual que el resto del dominio, la Agenda no imprime: devuelve valores
+# y lanza excepciones; main.py decide qué mostrar.
+
+
+class Agenda:
+
+    def __init__(self, registro: Registro):
+        if not isinstance(registro, Registro):
+            raise DatosInvalidos(
+                f"La agenda necesita un Registro (recibido: {registro!r}).")
+        self._registro = registro
+        self._pendientes = Cola()
+        self._programadas: set[str] = set()
+
+    def programar(self, inspeccion: Inspeccion, observaciones) -> None:
+        """Encola la inspección con sus observaciones, al final de la cola.
+
+        Validaciones, en este orden y ANTES de encolar:
+        1. que sea una Inspeccion -> DatosInvalidos
+        2. que no se haya ejecutado ya -> TransicionIlegal
+        3. que no esté ya en la cola -> DatosInvalidos. Se chequea contra
+           el conjunto _programadas, sin recorrer la cola.
+
+        Las observaciones no se validan acá: las valida el procedimiento
+        cuando la inspección se procesa, como en cualquier inspección."""
+        # 1. Tipo
+        if not isinstance(inspeccion, Inspeccion):
+            raise DatosInvalidos(
+                f"Solo se pueden programar inspecciones "
+                f"(recibido: {inspeccion!r}).")
+
+        # 2. No ejecutada
+        if inspeccion.fue_ejecutada():
+            raise TransicionIlegal(
+                f"La inspección {inspeccion.get_id()} ya fue ejecutada.")
+
+        # 3. No programada dos veces
+        if inspeccion.get_id() in self._programadas:
+            raise DatosInvalidos(
+                f"La inspección {inspeccion.get_id()} ya está programada.")
+
+        # Todo validado: recién ahora se toca la cola.
+        self._pendientes.encolar((inspeccion, observaciones))
+        self._programadas.add(inspeccion.get_id())
+
+    def procesar_siguiente(self) -> Reporte | None:
+        """Procesa la inspección que está al frente de la cola:
+
+        1. La desencola y saca su id de _programadas. Pase lo que pase en
+           los pasos siguientes, ya salió de la cola.
+        2. La ejecuta. Si falla, la excepción sigue de largo y no se
+           registra nada; la muestra quedó PENDIENTE por el rollback de
+           Inspeccion.ejecutar().
+        3. Si salió bien, registra la inspección y, si hubo, su reporte.
+
+        Devuelve el Reporte, o None si la muestra quedó conforme.
+        Sobre una agenda vacía lanza DatosInvalidos."""
+        if self._pendientes.esta_vacia():
+            raise DatosInvalidos("No hay inspecciones programadas.")
+
+        # 1. Sale de la cola
+        inspeccion, observaciones = self._pendientes.desencolar()
+        self._programadas.remove(inspeccion.get_id())
+
+        # 2. Ejecución
+        reporte = inspeccion.ejecutar(observaciones)
+
+        # 3. Registro de lo que salió bien
+        self._registro.registrar_inspeccion(inspeccion)
+        if reporte is not None:
+            self._registro.registrar_reporte(reporte)
+        return reporte
+
+    def procesar_todas(self) -> dict:
+        """Procesa toda la cola, en orden, hasta vaciarla.
+
+        Una inspección que falla no detiene a las demás: se cuenta como
+        fallida y se sigue con la siguiente. Solo se atrapa ErrorCalidad,
+        es decir, los errores del dominio. Un error de programación (por
+        ejemplo un TypeError) no es una "inspección fallida" y no se
+        esconde en el resumen: sigue de largo.
+
+        Devuelve un resumen:
+            {"completadas": 2, "fallidas": 1, "ids_fallidas": ["Insp4"]}
+        'ids_fallidas' dice cuáles hay que volver a programar."""
+        completadas = 0
+        ids_fallidas = []
+
+        while not self._pendientes.esta_vacia():
+            # Se mira el frente ANTES de procesar, para saber qué id anotar
+            # si falla (procesar_siguiente() la saca de la cola igual).
+            inspeccion, observaciones = self._pendientes.frente()
+            try:
+                self.procesar_siguiente()
+                completadas += 1
+            except ErrorCalidad:
+                ids_fallidas.append(inspeccion.get_id())
+
+        return {
+            "completadas": completadas,
+            "fallidas": len(ids_fallidas),
+            "ids_fallidas": ids_fallidas,
+        }
+
+    # --- consultas sin efectos secundarios --------------------------
+
+    def pendientes(self) -> list[str]:
+        """Ids de las inspecciones que esperan, en el orden en que se van
+        a procesar. Usa la consulta recursiva Cola.a_lista(): no saca
+        nada de la cola."""
+        ids = []
+        for inspeccion, observaciones in self._pendientes.a_lista():
+            ids.append(inspeccion.get_id())
+        return ids
+
+    def cantidad_pendientes(self) -> int:
+        """Cuántas inspecciones esperan. Usa la consulta recursiva
+        Cola.cantidad()."""
+        return self._pendientes.cantidad()
