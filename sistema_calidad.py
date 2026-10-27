@@ -1483,13 +1483,13 @@ class Registro:
 
         # ----------------------------------------------------
 
-        for muestra in lote.muestras():
+            for muestra in lote.muestras():
 
-            Muestra.actualizar_contador(
+                Muestra.actualizar_contador(
 
-                muestra.get_id()
+                    muestra.get_id()
 
-            )
+                )
 
     # ========================================================
 
