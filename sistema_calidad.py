@@ -642,17 +642,17 @@ class Muestra:
                 f"La muestra {self._id} está en estado "
                 f"{self._estado.value}: solo admite defectos EN_INSPECCION.")
 
-        # 2. Coherencia de los datos con el procedimiento en curso
-        recibidos = tuple(datos_observacion)
-        faltan = []
-        for campo in self._campos_observacion:
-            if campo not in recibidos:
-                faltan.append(campo)
-
-        sobran = []
-        for campo in recibidos:
-            if campo not in self._campos_observacion:
-                sobran.append(campo)
+        # 2. Coherencia de los datos con el procedimiento en curso.
+        #    Se resuelve con diferencia de conjuntos:
+        #    - faltan: lo que el procedimiento espera y no llegó
+        #    - sobran: lo que llegó y el procedimiento no espera
+        #    sorted() devuelve una lista ordenada: un set no tiene orden,
+        #    y sin esto el mensaje de error podría salir distinto en cada
+        #    corrida.
+        esperados = set(self._campos_observacion)
+        recibidos = set(datos_observacion)
+        faltan = sorted(esperados - recibidos)
+        sobran = sorted(recibidos - esperados)
 
         if faltan or sobran:
             raise DatosInvalidos(
