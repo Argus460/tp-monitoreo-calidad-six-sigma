@@ -1,30 +1,44 @@
 """Sistema de Monitoreo de Calidad Industrial — lógica del dominio.
 
 Trabajo práctico de Estructura de Datos. Todo el dominio vive en este
-archivo; el punto de entrada está separado en main.py, como pide la consigna.
+archivo; el punto de entrada está separado en main.py, como pide la
+consigna. Las clases del dominio no imprimen nada: informan con valores de
+retorno o con excepciones, y es main.py quien decide qué mostrar.
 
-ESTADO: esqueleto. Las clases, los atributos y las firmas están definidos.
-Los métodos tienen 'pass' y todavía no hacen nada.
-
-SOBRE LAS COLECCIONES: casi todo usa listas y diccionarios. Las únicas dos
-excepciones son Muestra.defectos() y Reporte.causas(), que devuelven tuplas
-porque el enunciado exige explícitamente una "copia inmutable" de los
-defectos. Todo método que devuelva una colección devuelve una COPIA, nunca
-la colección interna.
+SOBRE LAS COLECCIONES:
+    - Diccionarios: las muestras de un Lote, las certificaciones de un
+      Profesional, los datos de observación de un Defecto y todas las
+      categorías del Registro, indexados por id o por nombre.
+    - Listas: los defectos de una Muestra (internamente) y lo que
+      devuelven Lote.muestras(), Registro.inspecciones() y
+      Registro.reportes().
+    - Tuplas: Muestra.defectos() y Reporte.causas(), porque el enunciado
+      exige una "copia inmutable" de los defectos, y las configuraciones
+      que no cambian (CAMPOS_OBSERVACION, zonas_criticas).
+    - Conjuntos: donde la pregunta es de pertenencia o de diferencia
+      (Defecto.TIPOS_VALIDOS, los campos que faltan o sobran en
+      Muestra.registrar_defecto() y las inspecciones ya programadas en la
+      Agenda).
+    - Cola enlazada propia (Nodo y Cola), con consultas recursivas, para
+      procesar las inspecciones de la Agenda en orden de llegada.
+Todo método que devuelve una colección devuelve una COPIA, nunca la
+colección interna.
 
 Orden del archivo:
-    1. Excepciones
-    2. Validaciones
-    3. Estados (enums)
-    4. Defecto y sus subclases
-    5. Certificacion y Profesional
-    6. Equipo
-    7. Procedimiento y sus subclases
-    8. Muestra
-    9. Lote
+     1. Excepciones
+     2. Validaciones
+     3. Estados (enums)
+     4. Defecto
+     5. Certificacion y Profesional
+     6. Equipo
+     7. Procedimiento y sus subclases
+     8. Muestra
+     9. Lote
     10. Reporte
-   11. Inspeccion
-   12. Registro
+    11. Inspeccion
+    12. Registro
+    13. Cola enlazada (Nodo y Cola)
+    14. Agenda
 """
 
 from __future__ import annotations
