@@ -52,8 +52,6 @@ from enum import Enum
 import math
 
 import pickle
-import re
-from pathlib import Path
 
 # =====================================================================
 # 1. EXCEPCIONES
@@ -1486,6 +1484,10 @@ class Registro:
         pickle.dump(self, archivo)
         archivo.close()
 
+    def tiene_inspeccion(self, id: str) -> bool:
+        """True si hay una inspección registrada con ese id. No modifica nada."""
+        return id in self._inspecciones
+
     @classmethod
     def cargar(cls, nombre_archivo):
         archivo = open(nombre_archivo, "rb")
@@ -1744,7 +1746,13 @@ class Agenda:
         if inspeccion.get_id() in self._programadas:
             raise DatosInvalidos(
                 f"La inspección {inspeccion.get_id()} ya está programada.")
-
+            
+        # 4. No registrada de antemano: la Agenda es quien registra
+        if self._registro.tiene_inspeccion(inspeccion.get_id()):
+            raise DatosInvalidos(
+                f"La inspección {inspeccion.get_id()} ya está registrada: "
+                f"las inspecciones que pasan por la Agenda las registra ella.")
+            
         # Todo validado: recién ahora se toca la cola.
         self._pendientes.encolar((inspeccion, observaciones))
         self._programadas.add(inspeccion.get_id())
