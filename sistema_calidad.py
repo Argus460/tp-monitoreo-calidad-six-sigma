@@ -235,7 +235,7 @@ class Defecto:
         return self._gravedad
 
     def es_critico(self) -> bool:
-        return self._gravedad == Defecto.GRAVEDAD_MAXIMA
+        return self._gravedad == Defecto.GRAVEDAD_CRITICA
     
     def get_tipo(self) -> str:
         return self._tipo
@@ -492,8 +492,8 @@ class ProcedimientoDimensional(Procedimiento):
                 # (o infinito, si la tolerancia es diminuta) se recorta a 5
                 # en vez de romper math.ceil. El resultado es el mismo que
                 # con el techo después.
-                gravedad = max(1, math.ceil(
-                    min(5, round(desvio / tolerancia, 6))))
+                gravedad = max(Defecto.GRAVEDAD_MINIMA, math.ceil(
+                    min(Defecto.GRAVEDAD_MAXIMA, round(desvio / tolerancia, 6))))
                 hallazgo = {
                     "tipo": self.TIPO_DEFECTO,
                     "descripcion": f"Medición {m} fuera de tolerancia",
@@ -1598,6 +1598,8 @@ class Registro:
 # _inicio, y uno privado que recibe el nodo actual y se llama a sí mismo
 # con el siguiente. Las dos solo leen: no modifican la cola.
 
+
+# "13. COLA ENLAZADA"
 class Nodo:
     """Un eslabón de la cadena: un dato y la referencia al nodo siguiente.
     Es un detalle interno de la Cola; nadie de afuera lo usa."""
