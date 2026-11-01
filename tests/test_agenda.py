@@ -87,6 +87,16 @@ def test_programar_dos_veces_la_misma_inspeccion_lanza_error():
         agenda.programar(inspeccion, [10.0])
     assert agenda.cantidad_pendientes() == 1
 
+def test_programar_una_inspeccion_ya_registrada_lanza_error():
+    e = escenario()
+    registro = Registro()
+    agenda = Agenda(registro)
+    inspeccion = inspeccion_dimensional(e, 0)
+    registro.registrar_inspeccion(inspeccion)
+    with pytest.raises(DatosInvalidos, match="ya está registrada"):
+        agenda.programar(inspeccion, [10.0])
+    assert agenda.cantidad_pendientes() == 0
+    assert e["muestras"][0].esta_pendiente()
 
 def test_programar_una_inspeccion_ya_ejecutada_lanza_error():
     e = escenario()
