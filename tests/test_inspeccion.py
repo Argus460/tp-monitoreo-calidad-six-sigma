@@ -459,4 +459,57 @@ def test_circuito_completo_un_reporte_por_muestra_no_conforme():
     assert reportes[0].get_muestra() is muestras[0]
     assert lote.porcentaje_no_conformes() == 5.0
     assert lote.decidir() is EstadoLote.APROBADO
- 
+
+ # =====================================================================
+# Mediciones fuera de rango 
+# =====================================================================
+# Una medición es una longitud en mm: tiene que ser un número finito y
+# positivo. Cualquier otra cosa es un dato mal cargado -> DatosInvalidos,
+# y el rollback deja la muestra como estaba.
+
+def test_medicion_infinita_lanza_error_y_deja_la_muestra_intacta():
+    muestra = nueva_muestra()
+    insp = inspeccion_dimensional(muestra=muestra)
+    with pytest.raises(DatosInvalidos, match="medición"):
+        insp.ejecutar([float("inf")])
+    assert esta_intacta(muestra)
+
+
+def test_medicion_nan_lanza_error_y_no_queda_conforme():
+    """Sin el control, un NaN no generaba defecto y la muestra cerraba
+    CONFORME con un dato basura."""
+    muestra = nueva_muestra()
+    insp = inspeccion_dimensional(muestra=muestra)
+    with pytest.raises(DatosInvalidos, match="medición"):
+        insp.ejecutar([float("nan")])
+    assert esta_intacta(muestra)
+
+
+def test_medicion_negativa_lanza_error():
+    muestra = nueva_muestra()
+    with pytest.raises(DatosInvalidos, match="medición"):
+        inspeccion_dimensional(muestra=muestra).ejecutar([-10.0])
+    assert esta_intacta(muestra)
+
+
+def test_una_medicion_mala_descarta_tambien_las_buenas():
+    """Se validan todas las mediciones antes de calcular: la buena (10.6)
+    tampoco deja un defecto registrado."""
+    muestra = nueva_muestra()
+    with pytest.raises(DatosInvalidos):
+        inspeccion_dimensional(muestra=muestra).ejecutar([10.6, float("inf")])
+    assert esta_intacta(muestra)
+
+
+def test_nominal_infinito_lanza_error():
+    with pytest.raises(DatosInvalidos, match="nominal_mm"):
+        ProcedimientoDimensional(5, "calibre", None, float("inf"), 0.1)
+
+
+def test_tolerancia_diminuta_no_rompe_la_evaluacion():
+    """Antes la tolerancia se redondeaba a 6 decimales: 0.0000001 quedaba
+    en 0 y la evaluación lanzaba ZeroDivisionError."""
+    procedimiento = ProcedimientoDimensional(5, "calibre", None, 10.0,
+                                             0.0000001)
+    hallazgos = procedimiento.evaluar([10.5])
+    assert hallazgos[0]["gravedad"] == 5
