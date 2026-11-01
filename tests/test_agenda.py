@@ -205,3 +205,15 @@ def test_un_error_de_requisitos_tambien_cuenta_como_fallida():
     resumen = agenda.procesar_todas()
     assert resumen["fallidas"] == 1
     assert e["muestras"][0].esta_pendiente()
+
+def test_una_medicion_infinita_no_corta_el_procesamiento():
+    """Antes salía un OverflowError, que procesar_todas() no atrapa, y
+    las inspecciones de atrás quedaban sin procesar."""
+    e = escenario()
+    agenda = Agenda(Registro())
+    agenda.programar(inspeccion_dimensional(e, 0), [float("inf")])
+    agenda.programar(inspeccion_dimensional(e, 1), [10.0])
+    resumen = agenda.procesar_todas()
+    assert resumen == {"completadas": 1, "fallidas": 1,
+                       "ids_fallidas": ["Insp0"]}
+    assert agenda.cantidad_pendientes() == 0
