@@ -390,7 +390,8 @@ class Equipo:
 class Procedimiento(ABC):
     """Define sus requisitos (equipo y certificación), su límite de gravedad
     acumulada, y su criterio para convertir observaciones en defectos."""
-
+    
+    TIPO_DEFECTO: str | None = None
     CAMPOS_OBSERVACION: tuple[str] = tuple()
     contador = 0
 
@@ -701,11 +702,7 @@ class Muestra:
         falló después de haber marcado la muestra. Devuelve la muestra al
         estado exacto en que estaba antes del intento, para que un error
         en las observaciones no la deje atrapada en EN_INSPECCION y, con
-        ella, al lote entero sin poder decidirse.
-
-        ROLLBACK de una inspección fallida. Solo se puede ejecutar desde 
-        EN_INSPECCION. Elimina los defectos registrados durante ese intento, 
-        borra los campos de observación y vuelve la muestra a PENDIENTE."""
+        ella, al lote entero sin poder decidirse. """
 
         if self._estado is not EstadoMuestra.EN_INSPECCION:
             raise TransicionIlegal("La muestra no está en inspección")
