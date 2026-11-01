@@ -118,13 +118,17 @@ class Validar:
 
     @staticmethod
     def numero_positivo(valor, campo: str) -> None:
-        """Un int o float estrictamente mayor que 0. No acepta bool.
-        Se escribe 'not valor > 0' y no 'valor <= 0' para que un NaN
-        también sea rechazado (cualquier comparación con NaN da False)."""
+        """Un int o float finito y estrictamente mayor que 0. No acepta bool.
+        Se escribe 'not 0 < valor < math.inf' para rechazar también NaN e
+        infinito: cualquier comparación con NaN da False, e infinito no es
+        menor que sí mismo. Un infinito rompería los cálculos (math.ceil
+        de infinito lanza OverflowError) y un NaN pasaría todos los
+        controles sin generar ningún defecto."""
         if (isinstance(valor, bool) or not isinstance(valor, (int, float))
-                or not valor > 0):
+                or not 0 < valor < math.inf):
             raise DatosInvalidos(
-                f"'{campo}' debe ser un número positivo (recibido: {valor!r}).")
+                f"'{campo}' debe ser un número finito y positivo "
+                f"(recibido: {valor!r}).")
 
     @staticmethod
     def fecha(valor, campo: str) -> None:
@@ -448,22 +452,34 @@ class ProcedimientoDimensional(Procedimiento):
 
         super().__init__(limite_gravedad, categoria_equipo, certificacion)
         self._nominal_mm = nominal_mm
-        self._tolerancia_mm = tolerancia_mm
-    def evaluar(self, mediciones: list[float]) -> list[dict]: 
+        self._tolerancia_mm = tolerancia_mm    
+    def evaluar(self, mediciones: list[float]) -> list[dict]:
         if not isinstance(mediciones, (list)):
             raise DatosInvalidos(
                 f"'mediciones' debe ser una lista de números "
                 f"(recibido: {mediciones!r}).")
+        # Primero se validan TODAS las mediciones y recién después se
+        # calcula: así una medición mala no deja hallazgos a medio armar.
+        # Una medición es una longitud en mm: tiene que ser un número
+        # finito y positivo (se rechazan texto, bool, NaN, infinito, 0 y
+        # negativos).
         for m in mediciones:
-            if not isinstance(m, (int, float)) or isinstance(m, bool):
-                raise DatosInvalidos(
-                    f"Cada medición debe ser un número (recibido: {m!r}).")
+            Validar.numero_positivo(m, "medición")
         hallazgos = []
-        for m in mediciones: 
+        for m in mediciones:
+            # El desvío se redondea a 6 decimales para absorber el error de
+            # los flotantes (abs(10.3 - 10.0) da 0.3000000000000007).
+            # La tolerancia NO se redondea: una tolerancia menor a 0.000001
+            # quedaría en 0 y la división de abajo fallaría.
             desvio = round(abs(m - self._nominal_mm), 6)
-            tolerancia = round(self._tolerancia_mm, 6)
-            if desvio > tolerancia: 
-                gravedad = max(1, min(5, math.ceil(round(desvio / tolerancia, 6))))
+            tolerancia = self._tolerancia_mm
+            if desvio > tolerancia:
+                # El techo de 5 se aplica ANTES de ceil: un cociente enorme
+                # (o infinito, si la tolerancia es diminuta) se recorta a 5
+                # en vez de romper math.ceil. El resultado es el mismo que
+                # con el techo después.
+                gravedad = max(1, math.ceil(
+                    min(5, round(desvio / tolerancia, 6))))
                 hallazgo = {
                     "tipo": self.TIPO_DEFECTO,
                     "descripcion": f"Medición {m} fuera de tolerancia",
