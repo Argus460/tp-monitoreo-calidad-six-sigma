@@ -43,6 +43,8 @@ from sistema_calidad import (
 # siempre por parámetro. Es main quien decide que sea la de hoy.
 HOY = date.today()
  
+# Archivo donde la parte 5 guarda el Registro con pickle.
+ARCHIVO_REGISTRO = "registro.pkl"
  
 # =====================================================================
 # Funciones de presentación
@@ -319,11 +321,11 @@ def decidir_lotes(e: dict) -> None:
 def guardar_y_cargar(e: dict) -> None:
     titulo("5. GUARDAR Y CARGAR EL REGISTRO")
     registro = e["registro"]
-    archivo = Registro.ARCHIVO_POR_DEFECTO
+    archivo = ARCHIVO_REGISTRO
     try:
         registro.guardar(archivo)
         cargado = Registro.cargar(archivo)
-    except OSError as error:
+    except (OSError, ErrorCalidad) as error:
         print(f"No se pudo guardar o cargar el registro: {error}")
         return
  
