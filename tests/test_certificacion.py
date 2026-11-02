@@ -13,8 +13,8 @@ def test_certificacion_valida_se_crea_sin_errores():
 def test_creacion_certificacion_valida():
     """Prueba la creación de una certificación válida."""
     cert = Certificacion("ISO 9001", date(2026, 12, 31))
-    assert cert._nombre == "ISO 9001"
-    assert cert._vencimiento == date(2026, 12, 31)
+    assert cert.get_nombre == "ISO 9001"
+    assert cert.get_vencimiento == date(2026, 12, 31)
 
 def test_nombre_vacio_lanza_error():
     """Prueba que crear una certificación con nombre vacío lanza un error."""
