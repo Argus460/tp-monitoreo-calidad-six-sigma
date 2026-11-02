@@ -1371,9 +1371,6 @@ class Inspeccion:
  
  
 class Registro:
-
-    ARCHIVO_POR_DEFECTO = "registro.pkl"
-
  
     def __init__(self):
         self._lotes: dict[str, Lote] = {}
@@ -1477,9 +1474,8 @@ class Registro:
         return list(self._reportes.values())
 
     def guardar(self, nombre_archivo):
-        archivo = open(nombre_archivo, "wb")
-        pickle.dump(self, archivo)
-        archivo.close()
+        with open(nombre_archivo, "wb") as archivo:
+            pickle.dump(self, archivo)
 
     def tiene_inspeccion(self, id: str) -> bool:
         """True si hay una inspección registrada con ese id. No modifica nada."""
@@ -1487,108 +1483,111 @@ class Registro:
 
     @classmethod
     def cargar(cls, nombre_archivo):
-        archivo = open(nombre_archivo, "rb")
-        registro = pickle.load(archivo)
-        archivo.close()
+        try:
+            with open(nombre_archivo, "rb") as archivo:
+                registro = pickle.load(archivo)
 
-    # ========================================================
+        # ========================================================
 
-    # ACTUALIZAR CONTADOR DE LOTES
+        # ACTUALIZAR CONTADOR DE LOTES
 
-    # ========================================================
+        # ========================================================
 
-        for lote in registro._lotes.values():
-            Lote.actualizar_contador(lote.get_id())
+            for lote in registro._lotes.values():
+                Lote.actualizar_contador(lote.get_id())
 
-        # ----------------------------------------------------
+            # ----------------------------------------------------
 
-        # Las muestras están DENTRO de los lotes.
+            # Las muestras están DENTRO de los lotes.
 
-        #
+            #
 
-        # No existe registro._muestras, así que tenemos que
+            # No existe registro._muestras, así que tenemos que
 
-        # buscarlas recorriendo los lotes.
+            # buscarlas recorriendo los lotes.
 
-        # ----------------------------------------------------
+            # ----------------------------------------------------
 
-            for muestra in lote.muestras():
+                for muestra in lote.muestras():
 
-                Muestra.actualizar_contador(
+                    Muestra.actualizar_contador(
 
-                    muestra.get_id()
+                        muestra.get_id()
+
+                    )
+
+        # ========================================================
+
+        # ACTUALIZAR CONTADOR DE PROFESIONALES
+
+        # ========================================================
+
+            for profesional in registro._profesionales.values():
+
+                    Profesional.actualizar_contador(
+
+                        profesional.get_id()
+
+                    )
+
+        # ========================================================
+
+        # ACTUALIZAR CONTADOR DE EQUIPOS
+
+        # ========================================================
+
+            for equipo in registro._equipos.values():
+
+                Equipo.actualizar_contador(
+
+                    equipo.get_id()
 
                 )
 
-    # ========================================================
+        # ========================================================
 
-    # ACTUALIZAR CONTADOR DE PROFESIONALES
+        # ACTUALIZAR CONTADOR DE PROCEDIMIENTOS
 
-    # ========================================================
+        # ========================================================
 
-        for profesional in registro._profesionales.values():
+            for procedimiento in registro._procedimientos.values():
 
-                Profesional.actualizar_contador(
+                Procedimiento.actualizar_contador(
 
-                    profesional.get_id()
+                    procedimiento.get_id()
 
                 )
 
-    # ========================================================
+        # ========================================================
 
-    # ACTUALIZAR CONTADOR DE EQUIPOS
+        # ACTUALIZAR CONTADOR DE INSPECCIONES
 
-    # ========================================================
+        # ========================================================
 
-        for equipo in registro._equipos.values():
+            for inspeccion in registro._inspecciones.values():
 
-            Equipo.actualizar_contador(
+                Inspeccion.actualizar_contador(
 
-                equipo.get_id()
+                    inspeccion.get_id()
 
-            )
+                )
 
-    # ========================================================
+        # ========================================================
 
-    # ACTUALIZAR CONTADOR DE PROCEDIMIENTOS
+        # ACTUALIZAR CONTADOR DE REPORTES
 
-    # ========================================================
+        # ========================================================
 
-        for procedimiento in registro._procedimientos.values():
+            for reporte in registro._reportes.values():
 
-            Procedimiento.actualizar_contador(
+                Reporte.actualizar_contador(
 
-                procedimiento.get_id()
+                    reporte.get_id())
 
-            )
-
-    # ========================================================
-
-    # ACTUALIZAR CONTADOR DE INSPECCIONES
-
-    # ========================================================
-
-        for inspeccion in registro._inspecciones.values():
-
-            Inspeccion.actualizar_contador(
-
-                inspeccion.get_id()
-
-            )
-
-    # ========================================================
-
-    # ACTUALIZAR CONTADOR DE REPORTES
-
-    # ========================================================
-
-        for reporte in registro._reportes.values():
-
-            Reporte.actualizar_contador(
-
-                reporte.get_id())
-
-        return registro
+            return registro
+        
+        except AttributeError as error:
+            raise DatosInvalidos(f"El archivo guardado contiene datos incompatibles: {error}")
 
 # RECURSIVIDAD: cantidad() y a_lista() recorren la cadena de nodos de
 # forma recursiva. Una cadena de nodos es recursiva por naturaleza: un
