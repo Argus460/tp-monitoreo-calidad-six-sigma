@@ -10,9 +10,9 @@ def test_creacion_profesional():
         'nombre'
     )
 
-    assert profesional._id == 'Prof0'
-    assert profesional._nombre == 'nombre'
-    assert profesional._certificaciones == {}
+    assert profesional.get_id() == 'Prof0'
+    assert profesional.get_nombre() == 'nombre'
+    assert profesional.get_certificaciones() == {}
 
 def test_nombre_invalido():
     with pytest.raises(DatosInvalidos):
@@ -25,12 +25,3 @@ def test_nombre_solo_espacios():
 def test_nombre_no_texto():
     with pytest.raises(DatosInvalidos):
         Profesional(123)
-
-
-'''
-Falta  
-    def agregar_certificacion(self, cert):
-    def tiene_certificacion_vigente(self, nombre, fecha):
-    def id(self):
-    def nombre(self):
-'''
