@@ -381,3 +381,89 @@ def test_inspecciones_devuelve_una_copia():
     copia = registro.inspecciones()
     copia.clear()
     assert len(registro.inspecciones()) == 1
+
+# ============================================================
+
+# _BUSCAR
+
+# ============================================================
+
+def test_buscar_lote_existente():
+
+    registro = Registro()
+
+    lote = Lote(100)
+
+    registro.registrar_lote(lote)
+
+    resultado = registro._buscar(
+
+        registro._lotes,
+
+        lote.get_id(),
+
+        "lote"
+
+    )
+
+    assert resultado is lote
+
+def test_buscar_lote_inexistente_lanza_error():
+
+    registro = Registro()
+
+    with pytest.raises(DatosInvalidos):
+
+        registro._buscar(
+
+            registro._lotes,
+
+            "Lot99",
+
+            "lote"
+
+        )
+
+# ============================================================
+
+# CARGAR PICKLE
+
+# ============================================================
+
+def test_guardar_y_cargar_registro(tmp_path):
+
+    # NUEVO:
+
+    # tmp_path crea una carpeta temporal para este test.
+
+    archivo = tmp_path / "registro.pkl"
+
+    registro = Registro()
+
+    lote = Lote(100)
+
+    registro.registrar_lote(lote)
+
+    # Guardamos el Registro en el pickle.
+
+    registro.guardar(archivo)
+
+    # Lo volvemos a cargar.
+
+    registro_cargado = Registro.cargar(archivo)
+
+    # Buscamos el lote dentro del Registro cargado.
+
+    lote_cargado = registro_cargado.obtener_lote(
+
+        lote.get_id()
+
+    )
+
+    assert isinstance(registro_cargado, Registro)
+
+    assert isinstance(lote_cargado, Lote)
+
+    assert lote_cargado.get_id() == lote.get_id()
+
+    assert lote_cargado.get_cantidad_fabricada() == 100
