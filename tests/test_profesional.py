@@ -1,4 +1,5 @@
 import pytest
+from datetime import date
 from sistema_calidad import Profesional, DatosInvalidos, Certificacion
 
 
