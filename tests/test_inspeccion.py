@@ -513,3 +513,14 @@ def test_tolerancia_diminuta_no_rompe_la_evaluacion():
                                              0.0000001)
     hallazgos = procedimiento.evaluar([10.5])
     assert hallazgos[0]["gravedad"] == 5
+
+def test_suma_por_encima_del_limite_con_un_critico_queda_no_conforme():
+    """5 + 3 = 8 > 5 y además hay un crítico: las dos condiciones a la vez.
+    Completa las cuatro combinaciones de la consigna (justo en el límite y
+    por encima, con y sin crítico)."""
+    muestra = nueva_muestra()
+    reporte = inspeccion_dimensional(muestra=muestra).ejecutar([10.6, 10.25])
+    assert muestra.suma_gravedades() == 8
+    assert muestra.get_estado() is EstadoMuestra.NO_CONFORME
+    assert isinstance(reporte, Reporte)
+    assert len(reporte.causas()) == 2
