@@ -35,10 +35,7 @@ Trabajo práctico de **Estructura de Datos** — Programación Orientada a Objet
 proyecto/
 ├── README.md
 ├── main.py               punto de entrada
-├── ejemplo_completo.py   jornada completa, narrada paso a paso
 ├── sistema_calidad.py    toda la lógica del dominio
-├── conftest.py           hace que los tests encuentren sistema_calidad
-├── pytest.ini            marca la raíz del proyecto para pytest
 └── tests/                pruebas con pytest, un archivo por clase
 ```
 
@@ -233,14 +230,6 @@ Recorre el sistema entero en cinco partes, mostrando cada resultado y cada error
 5. **Persistencia:** guarda el `Registro` en `registro.pkl` y lo vuelve a cargar.
 
 Las inspecciones usan la fecha del día (`date.today()`), y las demás fechas del ejemplo se calculan a partir de ella con `timedelta`, así el resultado es el mismo cualquier día que se corra. El dominio, en cambio, nunca llama a `date.today()`: la fecha le llega siempre por parámetro.
-
-### Un ejemplo más largo: `ejemplo_completo.py`
-
-```
-py ejemplo_completo.py
-```
-
-Una jornada completa de la planta, narrada paso a paso, que usa prácticamente todos los métodos públicos del dominio. Veinte inspecciones pasan por la `Agenda`: cuatro fallan por motivos distintos (certificación vencida, calibración vencida, una medición mal cargada y un hallazgo incompleto), se corrigen y se vuelven a programar. Otras tres se ejecutan de a una, y el ejemplo muestra los reportes, la inmutabilidad de una muestra cerrada, la decisión de dos lotes, la cola por dentro y la persistencia. Guarda el registro en un archivo temporal y lo borra al terminar.
 
 ### Cómo correr las pruebas
 
