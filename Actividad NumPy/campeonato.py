@@ -75,29 +75,28 @@ class Campeonato:
     # ------------------------------------------------------------------
     def estadistica_investigada_1(self):
         """
-        Calcula una estadística del campeonato usando un método de NumPy
-        que no se haya visto en clase. El nombre de este método puede
-        cambiarse por uno que describa lo que calcula.
-
-        Requisitos:
-            - Usar un método de NumPy no visto en clase.
-            - Retornar el resultado obtenido.
-            - Explicar en un comentario qué hace el método de NumPy elegido
-              y qué información aporta sobre el campeonato.
+        Retorna la amplitud (rango) de puntajes de cada jugador,
+        en el mismo orden en que aparecen los nombres.
         """
-        pass
+        # np.ptp ("peak to peak") calcula la diferencia entre el valor máximo
+        # y el mínimo de un arreglo, en un solo paso (equivale a max - min).
+        # Con axis=1 lo calcula por fila, es decir, para cada jugador.
+        # Aporta una medida de regularidad: una amplitud chica indica un
+        # jugador constante en todas las partidas; una grande, un rendimiento
+        # irregular.
+        return np.ptp(self.puntaje_jugadores, axis=1)
 
     def estadistica_investigada_2(self):
         """
-        Calcula una estadística del campeonato usando otro método de NumPy,
-        distinto del anterior, que no se haya visto en clase. El nombre de
-        este método puede cambiarse por uno que describa lo que calcula.
-
-        Requisitos:
-            - Usar un método de NumPy no visto en clase y distinto
-              del usado en estadistica_investigada_1.
-            - Retornar el resultado obtenido.
-            - Explicar en un comentario qué hace el método de NumPy elegido
-              y qué información aporta sobre el campeonato.
+        Retorna, para cada jugador, en cuántas partidas superó el promedio
+        general del campeonato, en el mismo orden en que aparecen los nombres.
         """
-        pass
+        # np.count_nonzero cuenta los elementos distintos de cero de un arreglo;
+        # aplicado a una máscara booleana, cuenta cuántos True hay (True vale 1).
+        # Con axis=1 cuenta por fila, es decir, para cada jugador.
+        # Aporta en cuántas partidas cada jugador rindió por encima del
+        # promedio del campeonato: permite distinguir a quien lo supera de
+        # forma sostenida de quien lo hace sólo en partidas aisladas.
+        superan = self.puntaje_jugadores > self.promedio_general()
+        return np.count_nonzero(superan, axis=1)
+    pass
