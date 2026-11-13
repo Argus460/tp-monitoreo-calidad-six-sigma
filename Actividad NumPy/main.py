@@ -3,6 +3,7 @@ from repositorio import RepositorioCSV
 from visualizar import Visualizador
 from campeonato import Campeonato
 from jugador import Jugador
+from partida import Partida
 
 # ---------------------------------------------------------------
 # Lectura del archivo
