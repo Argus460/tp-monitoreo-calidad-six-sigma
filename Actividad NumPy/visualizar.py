@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 class Visualizador:
@@ -22,10 +23,21 @@ class Visualizador:
             - La gráfica debe cerrarse sola después de
               Visualizador.TIEMPO_EN_PANTALLA segundos.
         """
-        pass
+        nombres = ['Jugador 1', 'Jugador 2', 'Jugador 3', 'Jugador 4', 'Jugador 5']
+        promedios=[1,2,3,4,5]
+        plt.figure(figsize=(10, 6))
+        plt.bar(nombres, promedios, color='cornflowerblue', edgecolor='black', alpha=0.85)
+        plt.title('Promedio de cada jugador')
+        plt.xlabel('Jugadores')
+        plt.ylabel('Promedio')
+        
+        plt.show(block=False) 
+        plt.pause(Visualizador.TIEMPO_EN_PANTALLA) 
+        plt.close()
+
 
     @staticmethod
-    def grafico_torta(nombres, puntuaciones):
+    def grafico_torta(nombres =[ 'Juan' , 'María' , 'Pedro' , 'Ana' , 'Luis' ], puntuaciones = [ 100 , 200 , 150 , 300 , 250 ]):
         """
         Gráfica de TORTA con la proporción del puntaje total del campeonato
         que aportó cada jugador.
@@ -42,10 +54,31 @@ class Visualizador:
             - La gráfica debe cerrarse sola después de
               Visualizador.TIEMPO_EN_PANTALLA segundos.
         """
-        pass
+        
+
+        # Se elige una paleta de colores fija para el grafico
+        cmap = plt.get_cmap('Set3')
+
+        # Generamos una variable con los colores dinámicos para cada jugador
+        colores_dinamicos = cmap(np.linspace(0, 1, len(nombres)))
+
+        # Pasamos la variable generada al parámetro colors de plt.pie()
+        plt.pie(puntuaciones, labels=nombres, 
+        autopct='%1.1f%%', startangle=90,
+        colors=colores_dinamicos)
+        plt.title('Puntuaciones por jugador')
+        plt.axis('equal')
+        plt.show(block=False) 
+        plt.pause(TIEMPO_EN_PANTALLA) 
+        plt.close()
+
+
+
+        
 
     @staticmethod
     def grafico_dispersion(nombres, puntuaciones, partidas):
+
         """
         Gráfica de DISPERSIÓN con todos los puntajes del campeonato:
         en el eje X las partidas y en el eje Y el puntaje obtenido.
@@ -62,7 +95,27 @@ class Visualizador:
             - La gráfica debe cerrarse sola después de
               Visualizador.TIEMPO_EN_PANTALLA segundos.
         """
-        pass
+                
+        plt.figure(figsize=(10, 6))
+
+                # Iteramos sobre cada jugador usando su índice
+        for i in range(len(nombres)):
+                    # plt.scatter dibuja los puntos.
+                    # X = partidas, Y = puntuaciones del jugador i, label = nombre del jugador i
+            plt.scatter(partidas, puntuaciones[i], label=nombres[i])
+
+                # Título y rótulos de los ejes
+        plt.title('Puntajes de los jugadores a lo largo del campeonato')
+        plt.xlabel('Partidas')
+        plt.ylabel('Puntaje Obtenido')
+
+                # Se invoca a la leyenda (usa los 'label' que definimos en el scatter)
+        plt.legend()
+
+                # Secuencia de auto-cierre que vimos antes
+        plt.show(block=False)
+        plt.pause(TIEMPO_EN_PANTALLA)
+        plt.close()
 
     @staticmethod
     def grafico_lineas(nombres, puntuaciones, partidas):
@@ -82,4 +135,24 @@ class Visualizador:
             - La gráfica debe cerrarse sola después de
               Visualizador.TIEMPO_EN_PANTALLA segundos.
         """
-        pass
+    
+        plt.figure(figsize=(10, 6))
+
+        # Iteramos sobre cada jugador usando su índice
+        for i in range(len(nombres)):
+            # plt.plot dibuja la línea.
+            # X = partidas, Y = puntuaciones del jugador i, label = nombre del jugador i
+            plt.plot(partidas, puntuaciones[i], marker='o', label=nombres[i])
+
+        # Título y rótulos de los ejes
+        plt.title('Evolución de los puntajes de los jugadores a lo largo del campeonato')
+        plt.xlabel('Partidas')
+        plt.ylabel('Puntaje Obtenido')
+
+        # Se invoca a la leyenda (usa los 'label' que definimos en el plot)
+        plt.legend()
+
+        # Secuencia de auto-cierre que vimos antes
+        plt.show(block=False)
+        plt.pause(TIEMPO_EN_PANTALLA)
+        plt.close()     
