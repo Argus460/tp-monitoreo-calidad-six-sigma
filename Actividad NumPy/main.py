@@ -3,6 +3,7 @@ from repositorio import RepositorioCSV
 from visualizar import Visualizador
 from campeonato import Campeonato
 from jugador import Jugador
+from partida import Partida
 
 # ---------------------------------------------------------------
 # Lectura del archivo
@@ -53,3 +54,20 @@ puntuaciones_buscado = puntuaciones_jugadores[ubicacion]
 jugador1 = Jugador(nombre_buscado, puntuaciones_buscado)
 print(jugador1.get_nombre())
 print(jugador1.promedio())
+
+#--------------------------------------------------------------
+# Crear una Partida a partir de los datos de campeonato
+#--------------------------------------------------------------
+nombre_partida = "Partida1"
+
+ubicacion_partida = np.where(partidas == nombre_partida)[0][0]
+
+puntuaciones_partida = puntuaciones_jugadores[:, ubicacion_partida]
+
+partida1 = Partida(
+    nombre_partida,
+    puntuaciones_partida
+)
+
+print(partida1.get_nombre())
+print(partida1.promedio())
