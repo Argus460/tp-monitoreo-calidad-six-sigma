@@ -1,4 +1,4 @@
-
+import numpy as np
 class Partida:
     """Representa una partida del campeonato con los puntajes obtenidos en ella."""
 
@@ -23,4 +23,5 @@ class Partida:
         Requisitos:
             - El cálculo debe realizarse con NumPy.
         """
-        pass
+        return np.mean(self.puntaje_jugadores)
+
