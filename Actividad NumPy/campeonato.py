@@ -1,3 +1,4 @@
+import numpy as np
 
 class Campeonato:
     """Coordina jugadores y partidas, y calcula las estadísticas del campeonato."""
@@ -20,7 +21,8 @@ class Campeonato:
         Requisitos:
             - El cálculo debe realizarse con NumPy.
         """
-        pass
+        return np.mean(self.puntaje_jugadores)
+        
 
     def mejor_jugador(self):
         """
@@ -31,7 +33,9 @@ class Campeonato:
             - El cálculo debe realizarse con NumPy.
             - Retornar ambos valores juntos: nombre y promedio.
         """
-        pass
+        promedios = self.promedios_por_jugador()
+        indice_mejor = np.argmax(promedios)
+        return self.nombres_jugadores[indice_mejor], promedios[indice_mejor]
 
     def peor_jugador(self):
         """
@@ -42,7 +46,9 @@ class Campeonato:
             - El cálculo debe realizarse con NumPy.
             - Retornar ambos valores juntos: nombre y promedio.
         """
-        pass
+        promedios = self.promedios_por_jugador()
+        indice_peor = np.argmin(promedios)
+        return self.nombres_jugadores[indice_peor], promedios[indice_peor]
 
     def promedios_por_jugador(self):
         """
@@ -52,7 +58,7 @@ class Campeonato:
         Requisitos:
             - El cálculo debe realizarse con NumPy.
         """
-        pass
+        return np.mean(self.puntaje_jugadores, axis=1)
 
     def promedios_por_partida(self):
         """
@@ -62,7 +68,7 @@ class Campeonato:
         Requisitos:
             - El cálculo debe realizarse con NumPy.
         """
-        pass
+        return np.mean(self.puntaje_jugadores, axis=0)
 
     # ------------------------------------------------------------------
     # INVESTIGACIÓN: dos métodos de NumPy que no se hayan visto en clase
