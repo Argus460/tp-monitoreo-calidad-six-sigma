@@ -23,5 +23,5 @@ class Partida:
         Requisitos:
             - El cálculo debe realizarse con NumPy.
         """
-        return np.mean(self.puntaje_jugadores)
+        return np.mean(self.puntuaciones)
 
