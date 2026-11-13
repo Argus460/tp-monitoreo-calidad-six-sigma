@@ -154,5 +154,5 @@ class Visualizador:
 
         # Secuencia de auto-cierre que vimos antes
         plt.show(block=False)
-        plt.pause(TIEMPO_EN_PANTALLA)
+        plt.pause(Visualizador.TIEMPO_EN_PANTALLA)
         plt.close()     
