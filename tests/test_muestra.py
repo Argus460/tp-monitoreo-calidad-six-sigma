@@ -558,3 +558,37 @@ def test_str_muestra():
     assert "10" in texto
     assert "PENDIENTE" in texto
     assert "defectos:0" in texto
+
+
+
+# ============================================================
+# MUESTRA CERRADA (regla 9)
+# ============================================================
+
+def test_registrar_defecto_en_muestra_cerrada_lanza_error():
+    """Una vez cerrada, a la muestra no se le pueden agregar defectos:
+    ni el resultado ni los defectos cambian."""
+    muestra = Muestra(10)
+    muestra.marcar_en_inspeccion(("zona_afectada", "patron"))
+    muestra.registrar_defecto("visual", "Defecto leve", 2,
+                              zona_afectada="frente", patron="raya")
+    muestra.cerrar(5)
+
+    with pytest.raises(TransicionIlegal, match="EN_INSPECCION"):
+        muestra.registrar_defecto("visual", "Defecto crítico", 5,
+                                  zona_afectada="frente", patron="rotura")
+
+    assert len(muestra.defectos()) == 1
+    assert muestra.get_estado() is EstadoMuestra.CONFORME
+
+
+def test_revertir_una_muestra_cerrada_lanza_error():
+    """El rollback no sirve para reabrir una muestra cerrada."""
+    muestra = Muestra(10)
+    muestra.marcar_en_inspeccion(("zona_afectada", "patron"))
+    muestra.cerrar(5)
+
+    with pytest.raises(TransicionIlegal):
+        muestra.revertir_a_pendiente()
+
+    assert muestra.get_estado() is EstadoMuestra.CONFORME
