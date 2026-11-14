@@ -99,4 +99,3 @@ class Campeonato:
         # forma sostenida de quien lo hace sólo en partidas aisladas.
         superan = self.puntaje_jugadores > self.promedio_general()
         return np.count_nonzero(superan, axis=1)
-    pass
