@@ -23,8 +23,7 @@ class Visualizador:
             - La gráfica debe cerrarse sola después de
               Visualizador.TIEMPO_EN_PANTALLA segundos.
         """
-        nombres = ['Jugador 1', 'Jugador 2', 'Jugador 3', 'Jugador 4', 'Jugador 5']
-        promedios=[1,2,3,4,5]
+
         plt.figure(figsize=(10, 6))
         plt.bar(nombres, promedios, color='cornflowerblue', edgecolor='black', alpha=0.85)
         plt.title('Promedio de cada jugador')
@@ -37,7 +36,7 @@ class Visualizador:
 
 
     @staticmethod
-    def grafico_torta(nombres =[ 'Juan' , 'María' , 'Pedro' , 'Ana' , 'Luis' ], puntuaciones = [ 100 , 200 , 150 , 300 , 250 ]):
+    def grafico_torta(nombres, puntuaciones):
         """
         Gráfica de TORTA con la proporción del puntaje total del campeonato
         que aportó cada jugador.
@@ -63,13 +62,14 @@ class Visualizador:
         colores_dinamicos = cmap(np.linspace(0, 1, len(nombres)))
 
         # Pasamos la variable generada al parámetro colors de plt.pie()
-        plt.pie(puntuaciones, labels=nombres, 
+        totales = np.sum(puntuaciones, axis=1)
+        plt.pie(totales, labels=nombres, 
         autopct='%1.1f%%', startangle=90,
         colors=colores_dinamicos)
-        plt.title('Puntuaciones por jugador')
+        plt.title('Proporción del puntaje total por jugador')
         plt.axis('equal')
         plt.show(block=False) 
-        plt.pause(TIEMPO_EN_PANTALLA) 
+        plt.pause(Visualizador.TIEMPO_EN_PANTALLA) 
         plt.close()
 
 
@@ -114,7 +114,7 @@ class Visualizador:
 
                 # Secuencia de auto-cierre que vimos antes
         plt.show(block=False)
-        plt.pause(TIEMPO_EN_PANTALLA)
+        plt.pause(Visualizador.TIEMPO_EN_PANTALLA)
         plt.close()
 
     @staticmethod
